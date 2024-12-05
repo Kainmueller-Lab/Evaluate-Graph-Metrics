@@ -1,36 +1,23 @@
 import networkx as nx
 
-from src.metrics import GraphMetrics, graph_metrics_methods
-from src.matching import match_graphs
+from project.metrics import GraphMetrics, graph_metrics_methods
+from project.matching import match_graphs, MatchingType
+from project.toydata import examples
 
 def main():
 
     # 1) Load graphs with attributes
-    G = nx.DiGraph()
-    edges_G = [
-        (1, 2),
-        (2, 3),
-        (3, 4),
-        (4, 1),
-        (2, 4),
-        (4, 5)
-    ]
-    G.add_edges_from(edges_G)
-    H = nx.DiGraph()
-    edges_H = [
-        (1, 2),
-        (2, 3),
-        (3, 4),
-        (4, 1),
-        (2, 4),
-        #(4, 5)
-    ]
-    H.add_edges_from(edges_H)
+    # NOTE: We currently expect all graphs to be Branchings, see https://networkx.org/documentation/stable/reference/algorithms/tree.html
+    G, H = examples()
+    assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branching graphs"
 
     # 2) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
-    # NOTE: Is this symmetric? 
-    matching = match_graphs(source=G, target=H, matching_type=None)
+    # matching is a dictionary that maps nodes in target graph to nodes in source graph.
+    # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
+    matching = match_graphs(source=G, target=H, matching_type=MatchingType.Nearest)
+    print(matching)
+
 
     # 3) Compute metrics wrt to source and matched target graph
     for metric in graph_metrics_methods:
