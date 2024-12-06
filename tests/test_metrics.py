@@ -45,7 +45,8 @@ class TestMetrics(unittest.TestCase):
 
     # TODO:
     def test_street_mover_distance(self):
-        pass
+        result = GraphMetrics.street_mover_distance(self.G, self.G)
+        self.assertAlmostEqual(result, 0.0, delta=0.001)
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ class GraphMetrics:
 
     
     @staticmethod
-    def street_mover_distance(G, H, matching):
+    def street_mover_distance(G, H, matching=None):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -69,13 +69,11 @@ class GraphMetrics:
         # Nodes
         # NOTE: Nodes are given as a PyTorch tensor of shape (N, 3) containing N 3D coordinates where N is the number of nodes.
         G_coords = nx.get_node_attributes(G, 'coord')
-        N_coords = nx.get_node_attributes(H, 'coord')
-        
-        G_nodes = torch.tensor(list(G_coords.values()), dtype=torch.float32) # TODO: Check if this is the correct conversion.
-        H_nodes = torch.tensor(list(N_coords.values()), dtype=torch.float32)
-        print(G_nodes.shape, H_nodes.shape)
+        H_coords = nx.get_node_attributes(H, 'coord')
+        G_nodes = torch.from_numpy(np.array(list(G_coords.values()), dtype=np.float32)) # TODO: Check if this is the correct conversion.
+        H_nodes = torch.from_numpy(np.array(list(H_coords.values()), dtype=np.float32))
 
-        smd = StreetMoverDistance(eps=0.1, max_iter=10, reduction='mean') # TODO: Find best hyperparameters
+        smd = StreetMoverDistance(eps=0.001, max_iter=1000, reduction='mean') # TODO: Find best hyperparameters
         _, cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=100)
         return cost[0]
     
