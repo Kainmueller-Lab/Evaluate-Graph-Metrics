@@ -43,6 +43,10 @@ class TestMetrics(unittest.TestCase):
         result = GraphMetrics.f1_score(self.G, self.H, self.matching)
         self.assertEqual(result, 2 / (3/2 + 4/2))
 
+    # TODO:
+    def test_street_mover_distance(self):
+        pass
+
 
 if __name__ == "__main__":
     unittest.main()

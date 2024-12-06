@@ -1,10 +1,13 @@
 import inspect
 import networkx as nx
 import numpy as np
+import torch
+import torch.nn as nn
 # NOTE: Check out documentation of networkx for all available graph algorithms:
 # https://networkx.org/documentation/stable/reference/algorithms/index.html
 
 from project.utils import betti_1_number, compute_edge_metrics
+from project.streetmover_distance import StreetMoverDistance
 
 class GraphMetrics:
     
@@ -42,6 +45,7 @@ class GraphMetrics:
         
 
     # NOTE: This might have long runtime.
+    # TODO: Include tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
     @staticmethod
     def graph_edit_distance(G, H, matching=None):
         '''
@@ -54,8 +58,26 @@ class GraphMetrics:
             return -1
 
     
-    # TODO: Tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
-    # TODO: Street mover distance.
+    @staticmethod
+    def street_mover_distance(G, H, matching):
+        '''
+        Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
+        '''
+        # Adjancency matrices
+        G_adjacency = nx.to_numpy_array(G) # TODO: Check if G needs to be converted to undirected first.
+        H_adjacency = nx.to_numpy_array(H)
+        # Nodes
+        # NOTE: Nodes are given as a PyTorch tensor of shape (N, 3) containing N 3D coordinates where N is the number of nodes.
+        G_coords = nx.get_node_attributes(G, 'coord')
+        N_coords = nx.get_node_attributes(H, 'coord')
+        
+        G_nodes = torch.tensor(list(G_coords.values()), dtype=torch.float32) # TODO: Check if this is the correct conversion.
+        H_nodes = torch.tensor(list(N_coords.values()), dtype=torch.float32)
+        print(G_nodes.shape, H_nodes.shape)
+
+        smd = StreetMoverDistance(eps=0.1, max_iter=10, reduction='mean') # TODO: Find best hyperparameters
+        _, cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=100)
+        return cost[0]
     
 
     
