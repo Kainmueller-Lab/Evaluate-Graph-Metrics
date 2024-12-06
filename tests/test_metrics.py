@@ -3,49 +3,17 @@ import networkx as nx
 import numpy as np
 
 from project.metrics import GraphMetrics
+from project.matching import match_graphs, MatchingType
+from project.toydata import two_trees
 
 class TestMetrics(unittest.TestCase):
     def setUp(self):
         # NOTE:  We currently expect all graphs to be Branchings, see https://networkx.org/documentation/stable/reference/algorithms/tree.html
         # A branching is a directed forest with each node having, at most, one parent. So the maximum in-degree is equal to 1.
         # Nodes without parents are called roots. Nodes without children are called leaves.
-        self.G = nx.DiGraph()
-        nodes_G = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([1, 0, 0]), 'radius': 1}),
-            (3, {'coord': np.array([0, 1, 0]), 'radius': 1}),
-            (4, {'coord': np.array([0, 0, 1]), 'radius': 1}),
-            (5, {'coord': np.array([1, 1, 0]), 'radius': 1}),
-            (6, {'coord': np.array([0, 1, 1]), 'radius': 1}),
-        ]
-        edges_G = [
-            (1,2),
-            (2,3),
-            (2,4),
-            (3,5),
-            (3,6),
-        ]
-        self.G.add_nodes_from(nodes_G)
-        self.G.add_edges_from(edges_G)
+        self.G, self.H = two_trees() 
+        self.matching = match_graphs(source=self.G, target=self.H, matching_type=MatchingType.Nearest)
 
-        self.H = nx.DiGraph()
-        nodes_H = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([1, 0, 0]), 'radius': 1}),
-            (3, {'coord': np.array([0, 1, 0]), 'radius': 1}),
-            (4, {'coord': np.array([0, 0, 1]), 'radius': 1}),
-            (5, {'coord': np.array([1, 1, 0]), 'radius': 1}),
-            (6, {'coord': np.array([0, 1, 1]), 'radius': 1}),
-        ]
-        edges_H = [
-            (1,2),
-            #(2,3),
-            (2,4),
-            (3,5),
-            (3,6),
-        ]
-        self.H.add_nodes_from(nodes_H)
-        self.H.add_edges_from(edges_H)
 
     def test_is_branching(self):
         result = nx.is_branching(self.G)
@@ -55,9 +23,25 @@ class TestMetrics(unittest.TestCase):
         result = GraphMetrics.betti_0_error(self.G, self.H)
         self.assertEqual(result, 1)
 
+    def test_betti_1_error(self):
+        result = GraphMetrics.betti_1_error(self.G, self.H)
+        self.assertEqual(result, 0)
+
     def test_graph_edit_distance(self):
         result = GraphMetrics.graph_edit_distance(self.G, self.H)
-        self.assertEqual(result, 1.0)
+        self.assertEqual(result, 3.0)
+
+    def test_precision(self):
+        result = GraphMetrics.precision(self.G, self.H, self.matching)
+        self.assertEqual(result, 2/3)
+
+    def test_recall(self):
+        result = GraphMetrics.recall(self.G, self.H, self.matching)
+        self.assertEqual(result, 2/4)
+
+    def test_f1_score(self):
+        result = GraphMetrics.f1_score(self.G, self.H, self.matching)
+        self.assertEqual(result, 2 / (3/2 + 4/2))
 
 
 if __name__ == "__main__":
