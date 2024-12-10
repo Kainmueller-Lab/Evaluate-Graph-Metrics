@@ -1,4 +1,7 @@
 import networkx as nx
+from networkx.generators.atlas import graph_atlas
+import numpy as np
+
 
 def betti_1_number(G):
     """
@@ -21,6 +24,7 @@ def betti_1_number(G):
     # Betti 1 number formula
     return num_edges - num_nodes + num_components
 
+
 def compute_edge_metrics(G, H, matching):
     """
     Computes common edges (TP), false splits (FN), and false merges (FP).
@@ -39,3 +43,124 @@ def compute_edge_metrics(G, H, matching):
         "FP": len(false_merges),
     }
     return metrics
+
+
+def create_graph_from_swc(fn, scale_factor=None, offset=None):
+    """
+        Reads swc file and converts it to target graph structure.
+
+        Parameters:
+        ----------
+        str
+            The path to the input swc file.
+
+        Returns:
+        -------
+        G : networkx.Graph
+            The undirected input graph.
+        """
+    # create graph
+    graph = nx.Graph()
+    # open swc file
+    f = open(fn, "r")
+    if scale_factor is None:
+        scale_factor = [1, 1, 1]
+    # create graph node for each swc line
+    for line in f:
+        line = line.replace("\n", "")
+        if line == "":
+            continue
+        if line[0] == "#":
+            continue
+        if line[0] == " ":
+            continue
+        split = line.split(" ")
+        node_id = int(split[0])
+        node_type = int(float(split[1]))
+        x = float(split[2])*scale_factor[0]
+        y = float(split[3])*scale_factor[1]
+        z = float(split[4])*scale_factor[2]
+        if offset is not None:
+            x = x + offset[0]
+            y = y + offset[1]
+            z = z + offset[2]
+
+        radius = float(split[5])*scale_factor[2]
+        parent_id = int(split[6])
+
+        graph.add_node(
+            node_id,
+            coord = np.array([x, y, z]),
+            #parent_id=parent_id,
+            #node_type=node_type,
+            radius=radius
+        )
+        if parent_id != -1:
+            graph.add_edge(node_id, parent_id)
+
+    f.close()
+    return graph
+
+
+def create_directed_graph(graph, root_type=None, roots=None):
+    directed_graph = None
+    if root_type == "manual":
+        raise NotImplementedError
+    elif root_type == "largest_radius":
+        # convert graph to directed_graph and remove all edges
+        #directed_graph = nx.DiGraph()
+        directed_graph = graph.to_directed()
+        to_remove = list(directed_graph.edges)
+        directed_graph.remove_edges_from(to_remove)
+
+        # take for each connected component the end point with largest radius as root
+        connected_components = list(nx.connected_components(graph))
+        
+        # iterate through all connected components
+        for cc in connected_components:
+            cc_graph = graph.subgraph(cc)
+            if len(cc_graph.nodes) == 1:
+                continue
+            
+            # get end nodes
+            degree = cc_graph.degree()
+            terminal_idx = []
+            for k, item in degree:
+                if item == 1:
+                    terminal_idx.append(k)
+            
+            # get radius of end end nodes
+            radius = nx.get_node_attributes(cc_graph, 'radius')
+            terminal_radius = np.array([radius[k] for k in terminal_idx])
+            max_rad_idx = np.argmax(terminal_radius)
+            root_idx = terminal_idx[max_rad_idx]
+            max_rad = terminal_radius[max_rad_idx]
+
+            # starting at node with largest radius and traverse through
+            # connected component, add edges to directed graph
+            visited = []
+            stack = [root_idx]
+            while len(stack) > 0:
+                c_node = stack.pop()
+                neighbors = cc_graph.neighbors(c_node)
+                for n in neighbors:
+                    if n not in visited:
+                        stack.append(n)
+                        directed_graph.add_edge(c_node, n)
+                visited.append(c_node)
+    else:
+        raise NotImplementedError
+    return directed_graph
+
+
+def read_graph_from_file(filename):
+    graph = None
+    if filename.endswith(".swc"):
+        graph = create_graph_from_swc(filename)
+    else:
+        raise NotImplementedError
+    # convert unordered graph to ordered graph here?
+    # take endpoint with largest radius as root
+    graph = create_directed_graph(graph, root_type="largest_radius")
+    return graph
+

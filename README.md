@@ -1,6 +1,12 @@
 # Evaluate-Graph-Metrics
 Evaluate the similarity between two graphs, e.g. ground truth vs predicted skeletons of blood vessel segmentation.
 
+You can call the code like this:
+``` shell
+python main.py --gt tests/toygraph_GT.swc --pred tests/toygraph_predicted.swc
+```
+If you call only `main.py` without specifying the path variables for the ground truth and predicted graph, toy graphs from `project/toydata.py` will be used.
+
 ## Networkx package
 
 We make use of the [networkx](https://networkx.org/documentation/stable/reference/introduction.html) package.
