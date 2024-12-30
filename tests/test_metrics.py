@@ -43,7 +43,6 @@ class TestMetrics(unittest.TestCase):
         result = GraphMetrics.f1_score(self.G, self.H, self.matching)
         self.assertEqual(result, 2 / (3/2 + 4/2))
 
-    # TODO:
     def test_trivial_smd(self):
         result = GraphMetrics.street_mover_distance(self.G, self.G)
         self.assertAlmostEqual(result, 0.0, delta=0.001)
@@ -51,8 +50,7 @@ class TestMetrics(unittest.TestCase):
     def test_translated_smd(self):
         G, H = smd_graph()
         result = GraphMetrics.street_mover_distance(G, H)
-        # TODO: This returns an error. Will fix later.
-        #self.assertAlmostEqual(result, 1.0, delta=0.001)
+        self.assertAlmostEqual(result, 1.0, delta=0.001)
 
 
 if __name__ == "__main__":
