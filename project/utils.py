@@ -27,20 +27,36 @@ def betti_1_number(G):
 
 def compute_edge_metrics(G, H, matching):
     """
-    Computes common edges (TP), false splits (FN), and false merges (FP).
+    Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
     """
     G_edges = set(G.edges)
     H_edges = set([(matching[e[0]], matching[e[1]]) for e in H.edges])
 
-    false_splits = G_edges - H_edges  # False negatives
-    false_merges = H_edges - G_edges  # False positives
+    false_negatives = G_edges - H_edges  # False negatives
+    false_positives = H_edges - G_edges  # False positives
     common_edges = G_edges & H_edges  # True positives
+
+    false_merges = set()
+    for fp_edge in false_positives:
+        u, v =fp_edge
+        if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
+            false_merges.add(fp_edge)
+
+    H_copy = H.copy()
+    H_copy.remove_edges_from(false_merges)
+    components_before = nx.number_weakly_connected_components(H)
+    components_after = nx.number_weakly_connected_components(H_copy)
+    false_splits = components_after - components_before
+
+    #print("false_merges:", len(false_merges))
 
     metrics = {
         "TP": len(common_edges),
-        "FN": len(false_splits),
-        "FP": len(false_merges),
+        "FN": len(false_negatives),
+        "FP": len(false_positives),
+        "FM": len(false_merges),
+        "FS": false_splits
     }
     return metrics
 

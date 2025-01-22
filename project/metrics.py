@@ -28,7 +28,10 @@ class GraphMetrics:
     @staticmethod
     def precision(G, H, matching):
         metrics = compute_edge_metrics(G, H, matching)
-        TP, FP = metrics["TP"], metrics["FP"]
+        TP, FP, FM, FS, FN = metrics["TP"], metrics["FP"], metrics["FM"], metrics["FS"], metrics["FN"]
+        print("false_merges:", FM)
+        print("false_splits:", FS)
+        print("false_negatives:", FN)
         return TP / (TP + FP) if TP + FP > 0 else 0
 
     @staticmethod
