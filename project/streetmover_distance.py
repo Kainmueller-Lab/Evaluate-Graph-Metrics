@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 plt.switch_backend('agg')
 
@@ -22,38 +23,78 @@ class StreetMoverDistance(nn.Module):
         super(StreetMoverDistance, self).__init__()
         self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
 
-    def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=100):
+    def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=200):
         y_pc = self.get_point_cloud(y_A, y_nodes, n_points)
         output_pc = self.get_point_cloud(output_A, output_nodes, n_points)
         sink_dist, P, C = self.sinkhorn_distance(y_pc, output_pc)
         return (y_pc, output_pc), (sink_dist, P, C)
-    
-    def get_point_cloud(self, A, nodes, n_points):
+
+    import plotly.graph_objects as go
+    import torch
+
+    def get_point_cloud(self, A, nodes, n_points, visualize=True, title="Generated Point Cloud"):
         n_divisions = n_points - 1 + 0.01
         total_len = get_cumulative_distance(A, nodes)
         step = total_len / n_divisions
         points = []
         next_step = 0.
         used_len = 0.
-    
+
         for i in range(A.shape[0]):
             for j in range(i):
                 if A[i, j] == 1.:
                     next_step, used, pts = get_points(next_step, step, nodes[j].clone(), nodes[i].clone())
+                    if torch.isnan(torch.tensor(pts)).any():
+                        print(f"nan detected between edge {j} and {i}")
                     used_len += used
                     points += pts
                     last_node = nodes[i].clone()
-                    # plot_point_cloud(adj[0], coord[0], pts)
-        # trick in case we miss points, due to approximations in python computation of distances
+
+        # Handle edge cases where fewer points are generated
         if 0 < len(points) < n_points:
             while len(points) < n_points:
                 points.append((last_node[0].item(), last_node[1].item()))
-        # if the graph has no edges, create point cloud with 100 points in (0,0)
+
+        # Handle empty graphs
         if len(points) == 0:
-            return torch.zeros((100, 2))
-            # print(f"The point cloud has an expected number of points: {len(points)} instead of {n_points}")
-        # print(f"Generated {len(points)} points using {used_len}/{total_len} length")
-        return torch.FloatTensor(points)
+            points = torch.zeros((100, 2))  # Adjust to 3D for visualization
+
+        points = torch.FloatTensor(points)
+
+        # Optional Plotly visualization
+        if visualize:
+            self.visualize_point_cloud_plotly(points, title)
+
+        return points
+
+    def visualize_point_cloud_plotly(self, points, title="Generated Point Cloud"):
+        if points.shape[1] == 3:  # 3D visualization
+            fig = go.Figure(data=go.Scatter3d(
+                x=points[:, 0],
+                y=points[:, 1],
+                z=points[:, 2],
+                mode='markers',
+                marker=dict(size=2, color='blue', opacity=0.8),
+            ))
+            fig.update_layout(scene=dict(
+                xaxis_title="X Axis",
+                yaxis_title="Y Axis",
+                zaxis_title="Z Axis"),
+                title=title)
+        else:  # 2D visualization
+            fig = go.Figure(data=go.Scatter(
+                x=points[:, 0],
+                y=points[:, 1],
+                mode='markers',
+                marker=dict(size=6, color='blue', opacity=0.8),
+            ))
+            fig.update_layout(
+                xaxis_title="X Axis",
+                yaxis_title="Y Axis",
+                title=title
+            )
+
+        fig.show()
 
 
 def get_cumulative_distance(A, nodes):
@@ -68,8 +109,19 @@ def get_cumulative_distance(A, nodes):
 
 
 def get_points(next_step, step, a, b):
+    if torch.isnan(a).any() or torch.isnan(b).any():
+        print(f"NaN in node coordinates: a={a}, b={b}")
+        return next_step, 0, []
+    if torch.isinf(a).any() or torch.isinf(b).any():
+        print(f"Inf in node coordinates: a={a}, b={b}")
+        return next_step, 0, []
+
     l = euclidean_distance(a, b)
-    m = ((b[1] - a[1]) / (b[0] - a[0])).item()
+
+    if l < 1e-6:
+        print("skipping edge")
+        return next_step, 0, []
+    m = ((b[1] - a[1]) / (b[0] - a[0])).item() if b[0] != a[0] else 0.0
     sign_x = -1 if b[0] < a[0] else 1  # going backwards or forward
     sign_y = -1 if b[1] < a[1] else 1  # going backwards or forward
     pts = []

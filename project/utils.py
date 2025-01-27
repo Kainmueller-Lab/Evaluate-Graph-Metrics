@@ -31,7 +31,7 @@ def compute_edge_metrics(G, H, matching):
     Returns a dictionary with TP, FN, and FP values.
     """
     G_edges = set(G.edges)
-    H_edges = set([(matching[e[0]], matching[e[1]]) for e in H.edges])
+    H_edges = set([(matching[e[0]], matching[e[1]]) for e in H.edges if e[0] in matching and e[1] in matching])
 
     false_negatives = G_edges - H_edges  # False negatives
     false_positives = H_edges - G_edges  # False positives
@@ -40,7 +40,7 @@ def compute_edge_metrics(G, H, matching):
     false_merges = set()
     for fp_edge in false_positives:
         u, v =fp_edge
-        if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
+        if u in G and v in G and not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
             false_merges.add(fp_edge)
 
     H_copy = H.copy()
@@ -113,6 +113,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
         )
         if parent_id != -1:
             graph.add_edge(node_id, parent_id)
+
 
     f.close()
     return graph
