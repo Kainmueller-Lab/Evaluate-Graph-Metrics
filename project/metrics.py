@@ -79,7 +79,7 @@ class GraphMetrics:
         H_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in H_coords.values()]
 
         smd = StreetMoverDistance(eps=0.001, max_iter=400, reduction=None) # TODO: Find best hyperparameters
-        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=70000)
+        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=70)
 
         # Print the number of points in each point cloud
         print(f"Number of points in Graph G: {len(y_pc)}")

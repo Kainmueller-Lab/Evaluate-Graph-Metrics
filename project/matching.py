@@ -133,21 +133,6 @@ def match_greedy_parent(source, target):
     Matches nodes in the source graph to nodes in the target graph based on spherical proximity
     and parent relationship constraints. Also prints unmatched nodes in both graphs.
 
-    Parameters:
-    ----------
-    source : networkx.Graph
-        The source graph with 'coord' and 'radius' node attributes.
-    target : networkx.Graph
-        The target graph with 'coord' and 'radius' node attributes.
-
-    Returns:
-    -------
-    match_dict : dict
-        A dictionary mapping nodes in the source graph to nodes in the target graph.
-    unmatched_source : set
-        A set of nodes in the source graph that could not be matched.
-    unmatched_target : set
-        A set of nodes in the target graph that were not matched.
     """
     match_dict = {}
 

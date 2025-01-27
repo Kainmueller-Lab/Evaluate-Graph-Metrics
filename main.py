@@ -41,7 +41,7 @@ def main():
         print("number of nodes in H:", H.number_of_nodes())
     else:
         G, H = two_trees()
-    #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
     # 2) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
