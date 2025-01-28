@@ -1,13 +1,19 @@
 import networkx as nx
 import numpy as np
+from scipy.spatial import KDTree
+import pdb
 
 from enum import Enum
+
+from .utils import label_connected_components
+
 
 class MatchingType(Enum):
     Nearest = 1
     Nearest_Within_Radius = 2
     Greedy = 3
     Greedy_with_parent = 4
+    Hierarchical = 5
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
@@ -48,6 +54,8 @@ def match_graphs(source, target, matching_type):
         return match_greedy(source=source, target=target)
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
+    if matching_type == MatchingType.Hierarchical:
+        return match_greedy_hierarchical(source=source, target=target)
     return {}
 
 
@@ -125,8 +133,6 @@ def match_greedy(source, target):
 
     return match_dict
 
-import networkx as nx
-import numpy as np
 
 def match_greedy_parent(source, target):
     """
@@ -204,3 +210,98 @@ def match_greedy_parent(source, target):
     print("matched targets:", len(matched_targets))
 
     return match_dict, unmatched_source, unmatched_target
+
+
+def match_greedy_hierarchical(source, target):
+    
+    match_dict = {}
+    pred_matched_labels = {}
+    # resample graph to have nodes along the segments
+    
+    # find gt roots
+    gt_roots = [n for n, d in source.in_degree() if d==0]
+    pred_roots = [n for n, d in target.in_degree() if d==0]
+
+    # label connected components (each tree one label)
+    source, gt_labels = label_connected_components(source)
+    target, pred_labels = label_connected_components(target)
+    # get positions
+    source_positions = nx.get_node_attributes(source, 'coord')
+    target_positions = nx.get_node_attributes(target, 'coord')
+    if not source_positions or not target_positions:
+        raise ValueError("Both source and target graphs must have 'coord' attributes for nodes.")
+    # build pred kd tree
+    pred_kdtree = KDTree(np.array(list(target_positions.values())))
+
+    # iterate through each gt tree
+    for root in gt_roots:
+        clabel = gt_labels[root]
+        cnode = root
+        next_nodes = []
+        # traverse through tree
+        while True:
+            dists, candidates = pred_kdtree.query(
+                source_positions[cnode], p=2,
+                distance_upper_bound=source.nodes[root]["radius"]
+            )
+            # TODO: nearest neighbors should also work if no radius is given
+            print(dists, candidates)
+            if type(candidates) in [int, np.int64]:
+                candidates = [candidates]
+            if type(dists) == float:
+                dists = [dists]
+
+            for c in candidates:
+                c = c + 1 # node label start at 1
+                if source.in_degree(cnode) == target.in_degree(c):
+                    if source.in_degree(cnode) == 0:
+                        # match two roots with each other
+                        match_dict[cnode] = c
+                        pred_matched_labels[c] = source.nodes[
+                            cnode]["tree_label"]
+                        break
+                    if source.out_degree(cnode) == target.out_degree(c):
+                        # same node semantics
+                        # check if parent is matched to the same tree
+                        parent_id = list(target.predecessors(c))[0]
+                        parent_label = pred_matched_labels[parent_id]
+                        if clabel == parent_label:
+                            # match node nearest node with same semantics and
+                            # parent
+                            match_dict[cnode] = c
+                            pred_matched_labels[c] = source.nodes[
+                                cnode]["tree_label"]
+                            break
+                    else:
+                        print("same in degree, but different out_degree")
+                        print(cnode, c)
+                        print(target.nodes[c]["tree_label"])
+                        print(target.in_degree(c), target.out_degree(c))
+                        # match if it is the only candidate
+                        if len(candidates) == 1:
+                            if target.in_degree(c) == 0:
+                                # match new fragment
+                                match_dict[cnode] = c
+                                pred_matched_labels[c] = source.nodes[
+                                    cnode]["tree_label"]
+                                break
+
+                else:
+                    print(target.nodes[c]["tree_label"])
+                    print(target.in_degree(c), target.out_degree(c))
+             
+            if source.out_degree(cnode) > 0:
+                next_nodes += list(source.successors(cnode))
+                print("next nodes: ", next_nodes)
+            if len(next_nodes) > 0:
+                cnode = next_nodes.pop()
+                print("next cnode: ", cnode)
+            else:
+                break
+    
+    unmatched_source = None
+    unmatched_target = None
+    #unmatched_source = set(source.nodes) - set(match_dict.keys())
+
+    return match_dict, unmatched_source, unmatched_target
+

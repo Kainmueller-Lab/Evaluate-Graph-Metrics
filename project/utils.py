@@ -1,6 +1,7 @@
 import networkx as nx
 from networkx.generators.atlas import graph_atlas
 import numpy as np
+import pdb
 
 
 def betti_1_number(G):
@@ -180,4 +181,21 @@ def read_graph_from_file(filename):
     # take endpoint with largest radius as root
     graph = create_directed_graph(graph, root_type="largest_radius")
     return graph
+
+
+def label_connected_components(graph):
+    
+    # get connected components
+    connected_components = list(
+        nx.connected_components(graph.to_undirected(as_view=True)))
+    lbl = 0
+    # iterate through all connected components and assign tree label
+    for cc in connected_components:
+        cc_graph = graph.subgraph(cc)
+        for n in cc_graph.nodes:
+            graph.nodes[n]["tree_label"] = lbl
+        lbl += 1
+    node_labels = nx.get_node_attributes(graph, "tree_label")
+         
+    return graph, node_labels
 

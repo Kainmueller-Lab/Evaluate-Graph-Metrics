@@ -47,7 +47,8 @@ def main():
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
     # The matching variable is a dictionary that maps nodes in target graph to nodes in source graph.
     # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
-    #matching = match_graphs(source=G, target=H, matching_type=MatchingType.Greedy)
+    matching = match_graphs(source=G, target=H,
+                            matching_type=MatchingType.Hierarchical)
 
     # 3) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(G, H)
