@@ -4,7 +4,7 @@ from scipy.spatial import KDTree
 
 from enum import Enum
 
-from .utils import label_connected_components
+from .utils import label_connected_components, visualize_matching
 
 
 class MatchingType(Enum):
@@ -211,7 +211,7 @@ def match_greedy_parent(source, target):
     return match_dict, unmatched_source, unmatched_target
 
 
-def match_greedy_hierarchical(source, target):
+def match_hierarchical(source, target):
     
     match_dict = {}
     pred_matched_labels = {}
@@ -241,9 +241,18 @@ def match_greedy_hierarchical(source, target):
         while True:
             dists, candidates = pred_kdtree.query(
                 source_positions[cnode], p=2,
-                distance_upper_bound=source.nodes[root]["radius"]
+                distance_upper_bound=10
             )
-            # TODO: nearest neighbors should also work if no radius is given
+            # distance_upper_bound = source.nodes[cnode]["radius"]
+            # TODO: nearest neighbors should also work if no radius is given 
+            if np.isinf(dists):
+                if source.out_degree(cnode) > 0:
+                    next_nodes += list(source.successors(cnode))
+                if len(next_nodes) > 0:
+                    cnode = next_nodes.pop()
+                    continue
+                else:
+                    break
             if type(candidates) in [int, np.int64]:
                 candidates = [candidates]
             if type(dists) == float:
@@ -251,7 +260,7 @@ def match_greedy_hierarchical(source, target):
             candidates = np.array(candidates)
             candidates = candidates + 1
             if len(candidates) > 1:
-                print(dists, candidates)
+                print("dists, candidates: ", dists, candidates)
             
             # get semantic (root, segment, branching, end) and parent label
             candidate_semantic = []
@@ -278,7 +287,8 @@ def match_greedy_hierarchical(source, target):
                             else:
                                 break
                             if ancester_id in pred_matched_labels:
-                                candidate_parent_label.append(pred_matched_labels[parent_id])
+                                candidate_parent_label.append(pred_matched_labels[ancester_id])
+                                break
                             else:
                                 parent_id = ancester_id
                             i += 1
@@ -308,7 +318,6 @@ def match_greedy_hierarchical(source, target):
                     cnode_semantic = "segment"
                 else:
                     cnode_semantic = "branching"
-                
                 if np.any(np.logical_and(candidate_semantic == cnode_semantic,
                                          candidate_parent_label == clabel)):
                     # same semantic and parent
@@ -346,6 +355,7 @@ def match_greedy_hierarchical(source, target):
                 break
     unmatched_source = set(source.nodes)-set(match_dict.keys())
     unmatched_target = set(target.nodes) - set(match_dict.values())
+    visualize_matching(source, target, match_dict)
 
     return match_dict, unmatched_source, unmatched_target
 

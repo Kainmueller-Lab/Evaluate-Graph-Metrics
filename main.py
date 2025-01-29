@@ -25,6 +25,12 @@ def get_arguments():
         "--output_folder", type=str, default=None,
         help="path to output folder"
     )
+    parser.add_argument(
+        "--matching", type=str, default="hierarchical",
+        choices=["hierarchical", "nearest", "nearest_with_radius", "greedy",
+                 "greedy_with_parent"], #TODO: check if we can unify here
+        help="choose matching method to assign pred to gt nodes"
+    )
 
     args = parser.parse_args()
     return args
@@ -47,8 +53,13 @@ def main():
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
     # The matching variable is a dictionary that maps nodes in target graph to nodes in source graph.
     # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
-    matching = match_graphs(source=G, target=H,
-                            matching_type=MatchingType.Hierarchical)
+    if args.matching == "hierarchical":
+        matching_type = MatchingType.Hierarchical
+    elif args.matching == "nearest":
+        matching_type = MatchingType.Nearest
+    else:
+        raise NotImplementedError
+    matching = match_graphs(source=G, target=H, matching_type=matching_type)
 
     # 3) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(G, H)
