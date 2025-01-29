@@ -5,6 +5,10 @@ from networkx.generators.atlas import graph_atlas
 import numpy as np
 import napari
 import time
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
 
 def betti_1_number(G):
     """
@@ -287,4 +291,44 @@ def read_graph_from_file(filename):
     # take endpoint with largest radius as root
     graph = create_directed_graph(graph, root_type="largest_radius")
     return graph
+
+
+def label_connected_components(graph):
+    
+    # get connected components
+    connected_components = list(
+        nx.connected_components(graph.to_undirected(as_view=True)))
+    lbl = 0
+    # iterate through all connected components and assign tree label
+    for cc in connected_components:
+        cc_graph = graph.subgraph(cc)
+        for n in cc_graph.nodes:
+            graph.nodes[n]["tree_label"] = lbl
+        lbl += 1
+    node_labels = nx.get_node_attributes(graph, "tree_label")
+         
+    return graph, node_labels
+
+
+def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"):
+    gt_pos = np.array(list(nx.get_node_attributes(gt_graph, 'coord').values()))
+    pred_pos = np.array(list(nx.get_node_attributes(
+        pred_graph, 'coord').values()))
+    gt_matches = ["TP" if n in matched_dict.keys() else "FN" for n in gt_graph.nodes]
+    pred_matches = ["TP" if n in matched_dict.values() else "FP" for n in pred_graph.nodes]
+
+    data = {
+        "x": list(gt_pos[:,0]) + list(pred_pos[:,0]),
+        "y": list(gt_pos[:, 1]) + list(pred_pos[:,1]),
+        "z": list(gt_pos[:,2]) + list(pred_pos[:,2]),
+        "graph": ["gt",] * len(gt_pos) + ["pred",] * len(pred_pos),
+        "match": gt_matches + pred_matches
+    }
+    df = pd.DataFrame(data=data)
+    print(df)
+
+    fig = px.scatter_3d(df, x="x", y="y", z="z", color="match", symbol="graph",
+                       size_max=4)
+    fig.update_traces(marker={'size': 2})
+    fig.show()
 

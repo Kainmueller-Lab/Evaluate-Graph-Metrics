@@ -1,13 +1,18 @@
 import networkx as nx
 import numpy as np
+from scipy.spatial import KDTree
 
 from enum import Enum
+
+from .utils import label_connected_components, visualize_matching
+
 
 class MatchingType(Enum):
     Nearest = 1
     Nearest_Within_Radius = 2
     Greedy = 3
     Greedy_with_parent = 4
+    Hierarchical = 5
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
@@ -48,6 +53,8 @@ def match_graphs(source, target, matching_type):
         return match_greedy(source=source, target=target)
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
+    if matching_type == MatchingType.Hierarchical:
+        return match_greedy_hierarchical(source=source, target=target)
     return {}
 
 
@@ -125,8 +132,6 @@ def match_greedy(source, target):
 
     return match_dict
 
-import networkx as nx
-import numpy as np
 
 def match_greedy_parent(source, target):
     """
@@ -204,3 +209,153 @@ def match_greedy_parent(source, target):
     print("matched targets:", len(matched_targets))
 
     return match_dict, unmatched_source, unmatched_target
+
+
+def match_hierarchical(source, target):
+    
+    match_dict = {}
+    pred_matched_labels = {}
+    # resample graph to have nodes along the segments
+    
+    # find gt roots
+    gt_roots = [n for n, d in source.in_degree() if d==0]
+    pred_roots = [n for n, d in target.in_degree() if d==0]
+
+    # label connected components (each tree one label)
+    source, gt_labels = label_connected_components(source)
+    target, pred_labels = label_connected_components(target)
+    # get positions
+    source_positions = nx.get_node_attributes(source, 'coord')
+    target_positions = nx.get_node_attributes(target, 'coord')
+    if not source_positions or not target_positions:
+        raise ValueError("Both source and target graphs must have 'coord' attributes for nodes.")
+    # build pred kd tree
+    pred_kdtree = KDTree(np.array(list(target_positions.values())))
+
+    # iterate through each gt tree
+    for root in gt_roots:
+        clabel = gt_labels[root]
+        cnode = root
+        next_nodes = []
+        # traverse through tree
+        while True:
+            dists, candidates = pred_kdtree.query(
+                source_positions[cnode], p=2,
+                distance_upper_bound=10
+            )
+            # distance_upper_bound = source.nodes[cnode]["radius"]
+            # TODO: nearest neighbors should also work if no radius is given 
+            if np.isinf(dists):
+                if source.out_degree(cnode) > 0:
+                    next_nodes += list(source.successors(cnode))
+                if len(next_nodes) > 0:
+                    cnode = next_nodes.pop()
+                    continue
+                else:
+                    break
+            if type(candidates) in [int, np.int64]:
+                candidates = [candidates]
+            if type(dists) == float:
+                dists = [dists]
+            candidates = np.array(candidates)
+            candidates = candidates + 1
+            if len(candidates) > 1:
+                print("dists, candidates: ", dists, candidates)
+            
+            # get semantic (root, segment, branching, end) and parent label
+            candidate_semantic = []
+            candidate_parent_label = []
+            for pnode in candidates:
+                if target.in_degree(pnode) == 0:
+                    candidate_semantic.append("root")
+                    candidate_parent_label.append(None)
+                else:
+                    if target.out_degree(pnode) == 0:
+                        candidate_semantic.append("end")
+                    elif target.out_degree(pnode) == 1:
+                        candidate_semantic.append("segment")
+                    else:
+                        candidate_semantic.append("branching")
+                    parent_id = list(target.predecessors(pnode))[0]
+                    if parent_id in pred_matched_labels:
+                        candidate_parent_label.append(pred_matched_labels[parent_id])
+                    else:
+                        for i in range(3):
+                            ancester_id = list(target.predecessors(parent_id))
+                            if len(ancester_id) > 0:
+                                ancester_id = ancester_id[0]
+                            else:
+                                break
+                            if ancester_id in pred_matched_labels:
+                                candidate_parent_label.append(pred_matched_labels[ancester_id])
+                                break
+                            else:
+                                parent_id = ancester_id
+                            i += 1
+                        if len(candidate_semantic) > len(candidate_parent_label):
+                            candidate_parent_label.append(None)
+                            
+            candidate_semantic = np.array(candidate_semantic)
+            candidate_parent_label = np.array(candidate_parent_label)
+           
+            # match prediction nodes to gt nodes
+            match = False
+            if source.in_degree(cnode) == 0:
+                if np.any(candidate_semantic == "root"):
+                    # match two roots with each other
+                    pnode = candidates[candidate_semantic=="root"][0]
+                    match = True
+                elif np.any(candidate_parent_label == None):
+                    # match node with other semantic, but with unmatched parent
+                    pnode = candidates[candidate_parent_label == None][0]
+                    match = True
+                else:
+                    print("NOT MATCHED. Check if other gt tree close by")
+            else:
+                if source.out_degree(cnode) == 0:
+                    cnode_semantic = "end"
+                elif source.out_degree(cnode) == 1:
+                    cnode_semantic = "segment"
+                else:
+                    cnode_semantic = "branching"
+                if np.any(np.logical_and(candidate_semantic == cnode_semantic,
+                                         candidate_parent_label == clabel)):
+                    # same semantic and parent
+                    pnode = candidates[np.logical_and(
+                        candidate_semantic == cnode_semantic,
+                        candidate_parent_label == clabel)][0]
+                    match = True
+                elif np.any(candidate_parent_label == clabel):
+                    # same parent
+                    pnode = candidates[candidate_parent_label == clabel][0]
+                    match = True
+                elif np.any(np.logical_and(candidate_parent_label == None,
+                                      candidate_semantic == cnode_semantic)):
+                    pnode = candidates[np.logical_and(
+                        candidate_parent_label == None,
+                        candidate_semantic == cnode_semantic)][0]
+                    match = True
+                elif np.any(candidate_parent_label == None):
+                    pnode = candidates[candidate_parent_label == None][0]
+                    match = True
+                else:
+                    print("NOT MATCHED, please check")
+
+            if match:
+                match_dict[cnode] = pnode
+                pred_matched_labels[pnode] = source.nodes[
+                    cnode]["tree_label"]
+
+            
+            if source.out_degree(cnode) > 0:
+                next_nodes += list(source.successors(cnode))
+            if len(next_nodes) > 0:
+                cnode = next_nodes.pop()
+            else:
+                break
+    unmatched_source = set(source.nodes)-set(match_dict.keys())
+    unmatched_target = set(target.nodes) - set(match_dict.values())
+    visualize_matching(source, target, match_dict)
+
+    return match_dict, unmatched_source, unmatched_target
+
