@@ -54,7 +54,7 @@ def match_graphs(source, target, matching_type):
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
     if matching_type == MatchingType.Hierarchical:
-        return match_greedy_hierarchical(source=source, target=target)
+        return match_hierarchical(source=source, target=target)
     return {}
 
 
