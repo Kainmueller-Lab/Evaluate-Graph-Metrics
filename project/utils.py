@@ -1,7 +1,10 @@
+import sys
+
 import networkx as nx
 from networkx.generators.atlas import graph_atlas
 import numpy as np
-
+import napari
+import time
 
 def betti_1_number(G):
     """
@@ -23,6 +26,108 @@ def betti_1_number(G):
     
     # Betti 1 number formula
     return num_edges - num_nodes + num_components
+
+def compute_node_metrics(G, H, matching):
+    G_nodes = set(G.nodes)
+    H_nodes = set(matching[n] for n in H.nodes if n in matching) # unmatched H.nodes are removed need to include the unmatched BP
+
+    false_negatives = G_nodes - H_nodes
+    false_positives = H_nodes - G_nodes # need to include the unmatched bp targets or H.nodes
+    common_nodes = G_nodes & H_nodes
+
+    metrics = {
+        "TP": len(common_nodes),
+        "FN": len(false_negatives),
+        "FP": len(false_positives),
+    }
+    return metrics
+
+
+import plotly.graph_objects as go
+
+
+def visualization(G, H, false_merges, false_splits, matching):
+    # code structure is ready just need to add false splits and otner errors if needed. False merge is already included
+    G_nodes = G.nodes()
+    H_nodes = H.nodes()
+
+    G_edges = []
+    H_edges = []
+    FM = []  # False merges
+    FS = []  # False splits
+
+
+    for edge in G.edges():
+        node1, node2 = edge
+        node1_coord = G_nodes[node1]['coord']
+        node2_coord = G_nodes[node2]['coord']
+        G_edges.append([node1_coord.tolist(), node2_coord.tolist()])
+
+
+    for edge in H.edges():
+        node1, node2 = edge
+        node1_coord = H_nodes[node1]['coord']
+        node2_coord = H_nodes[node2]['coord']
+        H_edges.append([node1_coord.tolist(), node2_coord.tolist()])
+
+
+    for edge in false_merges:
+        node1, node2 = edge
+        node1_coord = H_nodes[node1]['coord']
+        node2_coord = H_nodes[node2]['coord']
+        FM.append([node1_coord.tolist(), node2_coord.tolist()])
+
+
+    fig = go.Figure()
+
+
+    for i, edge in enumerate(G_edges):
+        fig.add_trace(go.Scatter3d(
+            x=[edge[0][0], edge[1][0]],
+            y=[edge[0][1], edge[1][1]],
+            z=[edge[0][2], edge[1][2]],
+            mode='lines',
+            line=dict(color='green', width=3),
+            name="G_edges" if i == 0 else None,
+            showlegend=(i == 0)
+        ))
+
+
+    for i, edge in enumerate(H_edges):
+        fig.add_trace(go.Scatter3d(
+            x=[edge[0][0], edge[1][0]],
+            y=[edge[0][1], edge[1][1]],
+            z=[edge[0][2], edge[1][2]],
+            mode='lines',
+            line=dict(color='blue', width=3),
+            name="H_edges" if i == 0 else None,
+            showlegend=(i == 0)
+        ))
+
+
+    for i, edge in enumerate(FM):
+        fig.add_trace(go.Scatter3d(
+            x=[edge[0][0], edge[1][0]],
+            y=[edge[0][1], edge[1][1]],
+            z=[edge[0][2], edge[1][2]],
+            mode='lines',
+            line=dict(color='red', width=5),
+            name="False merge" if i == 0 else None,
+            showlegend=(i == 0)
+        ))
+
+
+    fig.update_layout(
+        title="Graph Visualization with Plotly",
+        scene=dict(
+            xaxis_title="X Axis",
+            yaxis_title="Y Axis",
+            zaxis_title="Z Axis"
+        ),
+        margin=dict(l=0, r=0, b=0, t=40)
+    )
+
+    fig.show()
 
 
 def compute_edge_metrics(G, H, matching):
@@ -48,6 +153,8 @@ def compute_edge_metrics(G, H, matching):
     components_before = nx.number_weakly_connected_components(H)
     components_after = nx.number_weakly_connected_components(H_copy)
     false_splits = components_after - components_before
+
+    visualization(G, H, false_merges, false_splits, matching)
 
     #print("false_merges:", len(false_merges))
 

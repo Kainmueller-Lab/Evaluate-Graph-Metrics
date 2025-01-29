@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 plt.switch_backend('agg')
 
 
+
 class StreetMoverDistance(nn.Module):
     r"""
         Given two planar graphs approximate them with two 2D point clouds equidistantly sampled over the edges.
@@ -32,10 +33,11 @@ class StreetMoverDistance(nn.Module):
     import plotly.graph_objects as go
     import torch
 
-    def get_point_cloud(self, A, nodes, n_points, visualize=True, title="Generated Point Cloud"):
+    def get_point_cloud(self, A, nodes, n_points, visualize=False, title="Generated Point Cloud"):
         n_divisions = n_points - 1 + 0.01
         total_len = get_cumulative_distance(A, nodes)
         step = total_len / n_divisions
+        #step=1
         points = []
         next_step = 0.
         used_len = 0.
@@ -60,6 +62,7 @@ class StreetMoverDistance(nn.Module):
             points = torch.zeros((100, 2))  # Adjust to 3D for visualization
 
         points = torch.FloatTensor(points)
+        #points = torch.stack(nodes)
 
         # Optional Plotly visualization
         if visualize:
