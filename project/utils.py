@@ -8,6 +8,7 @@ import time
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import pdb
 
 
 def betti_1_number(G):
@@ -325,10 +326,85 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
         "match": gt_matches + pred_matches
     }
     df = pd.DataFrame(data=data)
-    print(df)
 
     fig = px.scatter_3d(df, x="x", y="y", z="z", color="match", symbol="graph",
                        size_max=4)
     fig.update_traces(marker={'size': 2})
     fig.show()
 
+
+def visualize_graph(graph):
+    edge_x = []
+    edge_y = []
+    edge_z = []
+    for edge in graph.edges():
+        x0, y0, z0 = graph.nodes[edge[0]]['coord']
+        x1, y1, z1 = graph.nodes[edge[1]]['coord']
+        edge_x.append(x0)
+        edge_x.append(x1)
+        edge_x.append(None)
+        edge_y.append(y0)
+        edge_y.append(y1)
+        edge_y.append(None)
+        edge_z.append(z0)
+        edge_z.append(z1)
+        edge_z.append(None)
+
+    edge_trace = go.Scatter3d(
+        x=edge_x, y=edge_y, z=edge_z,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines')
+
+    node_x = []
+    node_y = []
+    node_z = []
+    for node in graph.nodes():
+        x, y, z = graph.nodes[node]['coord']
+        node_x.append(x)
+        node_y.append(y)
+        node_z.append(z)
+
+    node_trace = go.Scatter3d(
+        x=node_x, y=node_y, z=node_z,
+        mode='markers',
+        hoverinfo='text',
+        marker=dict(
+            size=2, 
+            line_width=2))
+    
+    fig = go.Figure(data=[edge_trace, node_trace])
+    fig.show()
+
+
+def resample_graph(graph, stepsize):
+    graph_resampled = graph.copy()
+    visualize_graph(graph)
+    
+    # get roots
+    roots = [n for n, d in graph.in_degree() if d==0]
+    positions = nx.get_node_attributes(graph, 'coord')
+    
+    pdb.set_trace()    
+    # traverse tree
+    for root in roots:
+        cnode = root
+        next_nodes = []
+        if graph.out_degree(cnode) > 0:
+            next_nodes += list(graph.successors(cnode))
+        while True:
+            cnext = next_nodes.pop()
+            cnode_pos = positions[cnode]
+            cnext_pos = positions[cnext]
+            dist = np.linalg.norm(np.array(cnode_pos) - np.array(cnext_pos))
+            if dist < stepsize:
+                print("segment < stepsize, not implemented yet")
+            else:
+                spacing = dist // stepsize
+
+
+            cnode = cnext
+            next_nodes += list(graph.successors(cnode))
+
+
+    return graph_resampled

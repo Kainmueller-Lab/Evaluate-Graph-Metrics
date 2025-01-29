@@ -3,7 +3,7 @@ import argparse
 
 from project.metrics import evaluate_all_metrics
 from project.matching import match_graphs, MatchingType
-from project.utils import read_graph_from_file
+from project.utils import read_graph_from_file, resample_graph
 from project.toydata import *
 import glob
 import os
@@ -31,6 +31,10 @@ def get_arguments():
                  "greedy_with_parent"], #TODO: check if we can unify here
         help="choose matching method to assign pred to gt nodes"
     )
+    parser.add_argument(
+        "--resample_stepsize", type=int, default=2,
+        help="stepsize for resampling gt and pred graph for node matching"
+    )
 
     args = parser.parse_args()
     return args
@@ -48,8 +52,12 @@ def main():
     else:
         G, H = two_trees()
     #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    
+    # 2) Resample both graphs to have same spacing
+    G_resampled = resample_graph(G, stepsize=args.resample_stepsize)
+    H_resampled = resample_graph(H, stepsize=args.resample_stepsize)
 
-    # 2) Match graphs
+    # 3) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
     # The matching variable is a dictionary that maps nodes in target graph to nodes in source graph.
     # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
@@ -61,10 +69,10 @@ def main():
         raise NotImplementedError
     matching = match_graphs(source=G, target=H, matching_type=matching_type)
 
-    # 3) Compute metrics wrt to source and matched target graph
+    # 4) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(G, H, matching)
 
-    # 4) Print results
+    # 5) Print results
     for name, value in results_dict.items():
         print(f"{name}: {value}")
 
