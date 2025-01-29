@@ -1,7 +1,6 @@
 import networkx as nx
 import numpy as np
 from scipy.spatial import KDTree
-import pdb
 
 from enum import Enum
 
@@ -245,63 +244,108 @@ def match_greedy_hierarchical(source, target):
                 distance_upper_bound=source.nodes[root]["radius"]
             )
             # TODO: nearest neighbors should also work if no radius is given
-            print(dists, candidates)
             if type(candidates) in [int, np.int64]:
                 candidates = [candidates]
             if type(dists) == float:
                 dists = [dists]
-
-            for c in candidates:
-                c = c + 1 # node label start at 1
-                if source.in_degree(cnode) == target.in_degree(c):
-                    if source.in_degree(cnode) == 0:
-                        # match two roots with each other
-                        match_dict[cnode] = c
-                        pred_matched_labels[c] = source.nodes[
-                            cnode]["tree_label"]
-                        break
-                    if source.out_degree(cnode) == target.out_degree(c):
-                        # same node semantics
-                        # check if parent is matched to the same tree
-                        parent_id = list(target.predecessors(c))[0]
-                        parent_label = pred_matched_labels[parent_id]
-                        if clabel == parent_label:
-                            # match node nearest node with same semantics and
-                            # parent
-                            match_dict[cnode] = c
-                            pred_matched_labels[c] = source.nodes[
-                                cnode]["tree_label"]
-                            break
-                    else:
-                        print("same in degree, but different out_degree")
-                        print(cnode, c)
-                        print(target.nodes[c]["tree_label"])
-                        print(target.in_degree(c), target.out_degree(c))
-                        # match if it is the only candidate
-                        if len(candidates) == 1:
-                            if target.in_degree(c) == 0:
-                                # match new fragment
-                                match_dict[cnode] = c
-                                pred_matched_labels[c] = source.nodes[
-                                    cnode]["tree_label"]
-                                break
-
+            candidates = np.array(candidates)
+            candidates = candidates + 1
+            if len(candidates) > 1:
+                print(dists, candidates)
+            
+            # get semantic (root, segment, branching, end) and parent label
+            candidate_semantic = []
+            candidate_parent_label = []
+            for pnode in candidates:
+                if target.in_degree(pnode) == 0:
+                    candidate_semantic.append("root")
+                    candidate_parent_label.append(None)
                 else:
-                    print(target.nodes[c]["tree_label"])
-                    print(target.in_degree(c), target.out_degree(c))
-             
+                    if target.out_degree(pnode) == 0:
+                        candidate_semantic.append("end")
+                    elif target.out_degree(pnode) == 1:
+                        candidate_semantic.append("segment")
+                    else:
+                        candidate_semantic.append("branching")
+                    parent_id = list(target.predecessors(pnode))[0]
+                    if parent_id in pred_matched_labels:
+                        candidate_parent_label.append(pred_matched_labels[parent_id])
+                    else:
+                        for i in range(3):
+                            ancester_id = list(target.predecessors(parent_id))
+                            if len(ancester_id) > 0:
+                                ancester_id = ancester_id[0]
+                            else:
+                                break
+                            if ancester_id in pred_matched_labels:
+                                candidate_parent_label.append(pred_matched_labels[parent_id])
+                            else:
+                                parent_id = ancester_id
+                            i += 1
+                        if len(candidate_semantic) > len(candidate_parent_label):
+                            candidate_parent_label.append(None)
+                            
+            candidate_semantic = np.array(candidate_semantic)
+            candidate_parent_label = np.array(candidate_parent_label)
+           
+            # match prediction nodes to gt nodes
+            match = False
+            if source.in_degree(cnode) == 0:
+                if np.any(candidate_semantic == "root"):
+                    # match two roots with each other
+                    pnode = candidates[candidate_semantic=="root"][0]
+                    match = True
+                elif np.any(candidate_parent_label == None):
+                    # match node with other semantic, but with unmatched parent
+                    pnode = candidates[candidate_parent_label == None][0]
+                    match = True
+                else:
+                    print("NOT MATCHED. Check if other gt tree close by")
+            else:
+                if source.out_degree(cnode) == 0:
+                    cnode_semantic = "end"
+                elif source.out_degree(cnode) == 1:
+                    cnode_semantic = "segment"
+                else:
+                    cnode_semantic = "branching"
+                
+                if np.any(np.logical_and(candidate_semantic == cnode_semantic,
+                                         candidate_parent_label == clabel)):
+                    # same semantic and parent
+                    pnode = candidates[np.logical_and(
+                        candidate_semantic == cnode_semantic,
+                        candidate_parent_label == clabel)][0]
+                    match = True
+                elif np.any(candidate_parent_label == clabel):
+                    # same parent
+                    pnode = candidates[candidate_parent_label == clabel][0]
+                    match = True
+                elif np.any(np.logical_and(candidate_parent_label == None,
+                                      candidate_semantic == cnode_semantic)):
+                    pnode = candidates[np.logical_and(
+                        candidate_parent_label == None,
+                        candidate_semantic == cnode_semantic)][0]
+                    match = True
+                elif np.any(candidate_parent_label == None):
+                    pnode = candidates[candidate_parent_label == None][0]
+                    match = True
+                else:
+                    print("NOT MATCHED, please check")
+
+            if match:
+                match_dict[cnode] = pnode
+                pred_matched_labels[pnode] = source.nodes[
+                    cnode]["tree_label"]
+
+            
             if source.out_degree(cnode) > 0:
                 next_nodes += list(source.successors(cnode))
-                print("next nodes: ", next_nodes)
             if len(next_nodes) > 0:
                 cnode = next_nodes.pop()
-                print("next cnode: ", cnode)
             else:
                 break
-    
-    unmatched_source = None
-    unmatched_target = None
-    #unmatched_source = set(source.nodes) - set(match_dict.keys())
+    unmatched_source = set(source.nodes)-set(match_dict.keys())
+    unmatched_target = set(target.nodes) - set(match_dict.values())
 
     return match_dict, unmatched_source, unmatched_target
 
