@@ -16,7 +16,7 @@ class MatchingType(Enum):
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
-def match_graphs(source, target, matching_type):
+def match_graphs(source, target, matching_type, visualize=False):
     """
     Matches nodes from the source graph to nodes in the target graph based on the specified matching strategy.
 
@@ -54,7 +54,8 @@ def match_graphs(source, target, matching_type):
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
     if matching_type == MatchingType.Hierarchical:
-        return match_hierarchical(source=source, target=target)
+        return match_hierarchical(source=source, target=target,
+                                  visualize=visualize)
     return {}
 
 
@@ -211,12 +212,12 @@ def match_greedy_parent(source, target):
     return match_dict, unmatched_source, unmatched_target
 
 
-def match_hierarchical(source, target):
-    
+def match_hierarchical(source, target, visualize=False):
+
     match_dict = {}
     pred_matched_labels = {}
     # resample graph to have nodes along the segments
-    
+
     # find gt roots
     gt_roots = [n for n, d in source.in_degree() if d==0]
     pred_roots = [n for n, d in target.in_degree() if d==0]
@@ -244,7 +245,7 @@ def match_hierarchical(source, target):
                 distance_upper_bound=10
             )
             # distance_upper_bound = source.nodes[cnode]["radius"]
-            # TODO: nearest neighbors should also work if no radius is given 
+            # TODO: add different options here: radius, parameter for fixed width
             if np.isinf(dists):
                 if source.out_degree(cnode) > 0:
                     next_nodes += list(source.successors(cnode))
@@ -257,11 +258,12 @@ def match_hierarchical(source, target):
                 candidates = [candidates]
             if type(dists) == float:
                 dists = [dists]
-            candidates = np.array(candidates)
-            candidates = candidates + 1
+            candidates = np.array(target.nodes)[candidates]
+            #candidates = candidates + 1 numbers are not consecutive anymore
+            #after resampling
             if len(candidates) > 1:
                 print("dists, candidates: ", dists, candidates)
-            
+
             # get semantic (root, segment, branching, end) and parent label
             candidate_semantic = []
             candidate_parent_label = []
@@ -294,10 +296,10 @@ def match_hierarchical(source, target):
                             i += 1
                         if len(candidate_semantic) > len(candidate_parent_label):
                             candidate_parent_label.append(None)
-                            
+
             candidate_semantic = np.array(candidate_semantic)
             candidate_parent_label = np.array(candidate_parent_label)
-           
+
             # match prediction nodes to gt nodes
             match = False
             if source.in_degree(cnode) == 0:
@@ -339,6 +341,7 @@ def match_hierarchical(source, target):
                     pnode = candidates[candidate_parent_label == None][0]
                     match = True
                 else:
+                    #TODO: check if other gt tree near pred node
                     print("NOT MATCHED, please check")
 
             if match:
@@ -346,7 +349,7 @@ def match_hierarchical(source, target):
                 pred_matched_labels[pnode] = source.nodes[
                     cnode]["tree_label"]
 
-            
+
             if source.out_degree(cnode) > 0:
                 next_nodes += list(source.successors(cnode))
             if len(next_nodes) > 0:
@@ -355,7 +358,9 @@ def match_hierarchical(source, target):
                 break
     unmatched_source = set(source.nodes)-set(match_dict.keys())
     unmatched_target = set(target.nodes) - set(match_dict.values())
-    visualize_matching(source, target, match_dict)
+    if visualize:
+        visualize_matching(source, target, match_dict)
+    # TODO: remove matched in-between nodes in both graphs
 
     return match_dict, unmatched_source, unmatched_target
 

@@ -1,3 +1,4 @@
+import logging
 import networkx as nx
 import argparse
 
@@ -7,6 +8,10 @@ from project.utils import read_graph_from_file, resample_graph
 from project.toydata import *
 import glob
 import os
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def get_arguments():
@@ -32,8 +37,17 @@ def get_arguments():
         help="choose matching method to assign pred to gt nodes"
     )
     parser.add_argument(
+        "--resample", action="store_true", default=False,
+        help="flag to resample gt and pred skeletons"
+    )
+    # maybe --no-resample as flag, as same resample should be default?
+    parser.add_argument(
         "--resample_stepsize", type=int, default=2,
         help="stepsize for resampling gt and pred graph for node matching"
+    )
+    parser.add_argument(
+        "--visualize", action="store_true", default=False,
+        help="flag to visualize intermediate steps"
     )
 
     args = parser.parse_args()
@@ -52,10 +66,15 @@ def main():
     else:
         G, H = two_trees()
     #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
-    
+
     # 2) Resample both graphs to have same spacing
-    G_resampled = resample_graph(G, stepsize=args.resample_stepsize)
-    H_resampled = resample_graph(H, stepsize=args.resample_stepsize)
+    if args.resample:
+        G_resampled = resample_graph(G, stepsize=args.resample_stepsize,
+                                     visualize=args.visualize)
+        H_resampled = resample_graph(H, stepsize=args.resample_stepsize,
+                                    visualize=args.visualize)
+        logger.info("number of nodes in G resampled: %i" % G_resampled.number_of_nodes())
+        logger.info("number of nodes in H resampled: %i" % H_resampled.number_of_nodes())
 
     # 3) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
@@ -67,7 +86,11 @@ def main():
         matching_type = MatchingType.Nearest
     else:
         raise NotImplementedError
-    matching = match_graphs(source=G, target=H, matching_type=matching_type)
+    matching = match_graphs(
+        source=G_resampled if args.resample else G,
+        target=H_resampled if args.resample else H,
+        matching_type=matching_type,
+        visualize=args.visualize)
 
     # 4) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(G, H, matching)

@@ -1,4 +1,5 @@
 import sys
+import logging
 
 import networkx as nx
 from networkx.generators.atlas import graph_atlas
@@ -9,6 +10,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import pdb
+
+
+
+logger = logging.getLogger(__name__)
 
 
 def betti_1_number(G):
@@ -46,9 +51,6 @@ def compute_node_metrics(G, H, matching):
         "FP": len(false_positives),
     }
     return metrics
-
-
-import plotly.graph_objects as go
 
 
 def visualization(G, H, false_merges, false_splits, matching):
@@ -378,7 +380,26 @@ def visualize_graph(graph):
 
 
 def update_segment(graph, old_segment_ids, new_segment_pos):
-    pass
+    # update one segment (from one root/branching point to another branching
+    # point/ end point with resampled points
+    npoints = len(graph.nodes)
+    succ = old_segment_ids[0]
+    cid = np.max(graph.nodes) + 1
+    cradius = graph.nodes[succ]["radius"] # TODO: interpolate radius
+    # insert new nodes and edges
+    for pos in new_segment_pos:
+        graph.add_node(cid, coord=pos, radius=cradius)
+        graph.add_edge(succ, cid)
+        succ = cid
+        cid += 1
+    # add last edge to original segment end point
+    graph.add_edge(succ, old_segment_ids[-1])
+
+    # remove nodes and edges from resampled segment
+    for cid in old_segment_ids[1:-1]:
+        graph.remove_node(cid)
+    if graph.has_edge(old_segment_ids[0], old_segment_ids[-1]):
+        graph.remove_edge(old_segment_ids[0], old_segment_ids[-1])
 
     return graph
 
@@ -402,18 +423,19 @@ def resample_segment(seg, stepsize):
     seg_new = np.empty((len(internal_points), seg.shape[1]))
     for i in range(seg.shape[1]):
         if np.all(np.isfinite(seg[:, i])):
-            seg_new[:, i] = np.interp(internal_points, cumlength, d[:, i])
+            seg_new[:, i] = np.interp(internal_points, cumlength, seg[:, i])
         else:
             seg_new[:, i] = np.nan
-    print(seg_new)
     return seg_new
 
 
-def resample_graph(graph, stepsize):
+def resample_graph(graph, stepsize, visualize=False):
+    logger.info("resampling graph with stepsize %i" % stepsize)
     # TODO: check given in-between points in interpolation
     # TODO: interpolate radius
     graph_resampled = graph.copy()
-    visualize_graph(graph)
+    if visualize:
+        visualize_graph(graph)
     
     # get roots
     roots = [n for n, d in graph.in_degree() if d==0]
@@ -437,19 +459,21 @@ def resample_graph(graph, stepsize):
                 segment_points.append(cnode)
                 segment_pos.append(positions[cnode])
                 # resample segment
-                print(np.array(segment_pos).shape, stepsize)
                 segment_resampled = resample_segment(
                     np.array(segment_pos), stepsize)
-                # TODO: add to resampled graph
-                graph_resampled = update_segment(
-                    graph_resampled, segment_points, segment_resampled)
+                # add to resampled graph
+                if segment_resampled is not None:
+                    graph_resampled = update_segment(
+                        graph_resampled, segment_points, segment_resampled)
 
                 # if segment end point is branching point, add it as next start
                 if graph.out_degree(cnode) > 1:
                     next_starts.append(cnode)
-            print(next_starts)
-            start = next_starts.pop()
-
-    visualize_graph(graph)
+            if len(next_starts) > 0:
+                start = next_starts.pop()
+            else:
+                break
+    if visualize:
+        visualize_graph(graph_resampled)
 
     return graph_resampled
