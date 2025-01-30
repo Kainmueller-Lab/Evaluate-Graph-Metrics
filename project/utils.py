@@ -377,7 +377,41 @@ def visualize_graph(graph):
     fig.show()
 
 
+def update_segment(graph, old_segment_ids, new_segment_pos):
+    pass
+
+    return graph
+
+
+# adapted from https://rdrr.io/cran/nat/src/R/neuron.R#sym-resample_segment
+def resample_segment(seg, stepsize):
+    if seg.shape[0] < 2:
+        return None
+    seg_xyz = seg[:, :3]
+    l = np.sum(np.sqrt(np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1)))
+    if l <= stepsize:
+        return None
+
+    internal_points = np.arange(stepsize, l, stepsize)
+    if internal_points[-1] == l:
+        internal_points = internal_points[:-1]
+
+    cumlength = np.insert(np.cumsum(np.sqrt(
+        np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1))), 0, 0)
+
+    seg_new = np.empty((len(internal_points), seg.shape[1]))
+    for i in range(seg.shape[1]):
+        if np.all(np.isfinite(seg[:, i])):
+            seg_new[:, i] = np.interp(internal_points, cumlength, d[:, i])
+        else:
+            seg_new[:, i] = np.nan
+    print(seg_new)
+    return seg_new
+
+
 def resample_graph(graph, stepsize):
+    # TODO: check given in-between points in interpolation
+    # TODO: interpolate radius
     graph_resampled = graph.copy()
     visualize_graph(graph)
     
@@ -385,26 +419,37 @@ def resample_graph(graph, stepsize):
     roots = [n for n, d in graph.in_degree() if d==0]
     positions = nx.get_node_attributes(graph, 'coord')
     
-    pdb.set_trace()    
     # traverse tree
     for root in roots:
-        cnode = root
-        next_nodes = []
-        if graph.out_degree(cnode) > 0:
-            next_nodes += list(graph.successors(cnode))
-        while True:
-            cnext = next_nodes.pop()
-            cnode_pos = positions[cnode]
-            cnext_pos = positions[cnext]
-            dist = np.linalg.norm(np.array(cnode_pos) - np.array(cnext_pos))
-            if dist < stepsize:
-                print("segment < stepsize, not implemented yet")
-            else:
-                spacing = dist // stepsize
+        start = root
+        next_starts = []
+        while graph.out_degree(start) > 0:
+            childs = list(graph.successors(start))
+            for child in childs:
+                # find complete segment up to the next branching point
+                segment_points = [start]
+                segment_pos = [positions[start]]
+                cnode = child
+                while graph.out_degree(cnode) == 1:
+                    segment_points.append(cnode)
+                    segment_pos.append(positions[cnode])
+                    cnode = list(graph.successors(cnode))[0]
+                segment_points.append(cnode)
+                segment_pos.append(positions[cnode])
+                # resample segment
+                print(np.array(segment_pos).shape, stepsize)
+                segment_resampled = resample_segment(
+                    np.array(segment_pos), stepsize)
+                # TODO: add to resampled graph
+                graph_resampled = update_segment(
+                    graph_resampled, segment_points, segment_resampled)
 
+                # if segment end point is branching point, add it as next start
+                if graph.out_degree(cnode) > 1:
+                    next_starts.append(cnode)
+            print(next_starts)
+            start = next_starts.pop()
 
-            cnode = cnext
-            next_nodes += list(graph.successors(cnode))
-
+    visualize_graph(graph)
 
     return graph_resampled
