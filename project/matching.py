@@ -1,10 +1,14 @@
+import logging
 import networkx as nx
 import numpy as np
 from scipy.spatial import KDTree
+import time
 
 from enum import Enum
-
 from .utils import label_connected_components, visualize_matching
+
+
+logger = logging.getLogger(__name__)
 
 
 class MatchingType(Enum):
@@ -16,7 +20,7 @@ class MatchingType(Enum):
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
-def match_graphs(source, target, matching_type):
+def match_graphs(source, target, matching_type, visualize=False):
     """
     Matches nodes from the source graph to nodes in the target graph based on the specified matching strategy.
 
@@ -41,7 +45,7 @@ def match_graphs(source, target, matching_type):
         If a source node is not matched (e.g., in Greedy), it will not appear in the dictionary.
     """
     assert matching_type in MatchingType, f"Unknown matching type: {matching_type}"
-
+    logger.info("start node matching (%s)" % matching_type)
     if matching_type == MatchingType.Nearest:
         # Matches a source node to the closest target node. Can be many-to-one. Every source node is matched.
         return match_nearest(source=source, target=target)
@@ -54,7 +58,10 @@ def match_graphs(source, target, matching_type):
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
     if matching_type == MatchingType.Hierarchical:
-        return match_hierarchical(source=source, target=target)
+        return match_hierarchical(source=source, target=target,
+                                  visualize=visualize)
+    #NOTE: in linajea https://www.nature.com/articles/s41587-022-01427-7 they
+    # do hungarian matching on edges
     return {}
 
 
@@ -213,12 +220,33 @@ def match_greedy_parent(source, target):
     return match_dict, unmatched_source, unmatched_target
 
 
-def match_hierarchical(source, target):
-    
+def check_parent_tree_label(graph, node, pred_matched_labels):
+    parent_id = list(graph.predecessors(node))[0]
+    parent_label = None
+    if parent_id in pred_matched_labels:
+        parent_label = pred_matched_labels[parent_id]
+    else:
+        # check also for grandparents if parent is not assigned
+        for i in range(3):
+            ancester_id = list(graph.predecessors(parent_id))
+            if len(ancester_id) > 0:
+                ancester_id = ancester_id[0]
+            else:
+                break
+            if ancester_id in pred_matched_labels:
+                parent_label = pred_matched_labels[ancester_id]
+                break
+            else:
+                parent_id = ancester_id
+    return parent_label
+
+
+def match_hierarchical(source, target, visualize=False):
+    start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}
     # resample graph to have nodes along the segments
-    
+
     # find gt roots
     gt_roots = [n for n, d in source.in_degree() if d==0]
     pred_roots = [n for n, d in target.in_degree() if d==0]
@@ -231,8 +259,9 @@ def match_hierarchical(source, target):
     target_positions = nx.get_node_attributes(target, 'coord')
     if not source_positions or not target_positions:
         raise ValueError("Both source and target graphs must have 'coord' attributes for nodes.")
-    # build pred kd tree
+    # build kd trees
     pred_kdtree = KDTree(np.array(list(target_positions.values())))
+    gt_kdtree = KDTree(np.array(list(source_positions.values())))
 
     # iterate through each gt tree
     for root in gt_roots:
@@ -246,7 +275,7 @@ def match_hierarchical(source, target):
                 distance_upper_bound=10
             )
             # distance_upper_bound = source.nodes[cnode]["radius"]
-            # TODO: nearest neighbors should also work if no radius is given 
+            # TODO: add different options here: radius, parameter for fixed width
             if np.isinf(dists):
                 if source.out_degree(cnode) > 0:
                     next_nodes += list(source.successors(cnode))
@@ -259,11 +288,10 @@ def match_hierarchical(source, target):
                 candidates = [candidates]
             if type(dists) == float:
                 dists = [dists]
-            candidates = np.array(candidates)
-            candidates = candidates + 1
+            candidates = np.array(target.nodes)[candidates]
             if len(candidates) > 1:
                 print("dists, candidates: ", dists, candidates)
-            
+
             # get semantic (root, segment, branching, end) and parent label
             candidate_semantic = []
             candidate_parent_label = []
@@ -278,28 +306,12 @@ def match_hierarchical(source, target):
                         candidate_semantic.append("segment")
                     else:
                         candidate_semantic.append("branching")
-                    parent_id = list(target.predecessors(pnode))[0]
-                    if parent_id in pred_matched_labels:
-                        candidate_parent_label.append(pred_matched_labels[parent_id])
-                    else:
-                        for i in range(3):
-                            ancester_id = list(target.predecessors(parent_id))
-                            if len(ancester_id) > 0:
-                                ancester_id = ancester_id[0]
-                            else:
-                                break
-                            if ancester_id in pred_matched_labels:
-                                candidate_parent_label.append(pred_matched_labels[ancester_id])
-                                break
-                            else:
-                                parent_id = ancester_id
-                            i += 1
-                        if len(candidate_semantic) > len(candidate_parent_label):
-                            candidate_parent_label.append(None)
-                            
+                    candidate_parent_label.append(
+                        check_parent_tree_label(target, pnode,
+                                                pred_matched_labels))
             candidate_semantic = np.array(candidate_semantic)
             candidate_parent_label = np.array(candidate_parent_label)
-           
+
             # match prediction nodes to gt nodes
             match = False
             if source.in_degree(cnode) == 0:
@@ -333,22 +345,43 @@ def match_hierarchical(source, target):
                     match = True
                 elif np.any(np.logical_and(candidate_parent_label == None,
                                       candidate_semantic == cnode_semantic)):
+                    # same semantic, but parent None
                     pnode = candidates[np.logical_and(
                         candidate_parent_label == None,
                         candidate_semantic == cnode_semantic)][0]
                     match = True
                 elif np.any(candidate_parent_label == None):
+                    # parent None
                     pnode = candidates[candidate_parent_label == None][0]
                     match = True
                 else:
-                    print("NOT MATCHED, please check")
+                    # candidate parents are already matched to other tree
+                    # check if node of other tree is close by, if not match
+                    for candidate, c_parent_label in zip(candidates, candidate_parent_label):
+                        # TODO: put query in def
+                        gt_dists, gt_candidates = gt_kdtree.query(
+                            target_positions[candidate], p=2,
+                            distance_upper_bound=10
+                        )
+                        if type(gt_candidates) in [int, np.int64]:
+                            gt_candidates = [gt_candidates]
+                        gt_candidate_labels = [source.nodes[
+                            np.array(source.nodes)[gtc]]["tree_label"] for gtc in gt_candidates]
+                        if np.any(np.array(gt_candidate_labels) == c_parent_label):
+                            continue
+                        else:
+                            match = True
+                            pnode = candidate
+                            break
+                    if match == False:
+                        logger.debug("for gt node %i with label %i, no matching candidate: %s, %s" % (
+                            cnode, clabel, candidates, candidate_parent_label))
 
             if match:
                 match_dict[cnode] = pnode
                 pred_matched_labels[pnode] = source.nodes[
                     cnode]["tree_label"]
 
-            
             if source.out_degree(cnode) > 0:
                 next_nodes += list(source.successors(cnode))
             if len(next_nodes) > 0:
@@ -357,7 +390,11 @@ def match_hierarchical(source, target):
                 break
     unmatched_source = set(source.nodes)-set(match_dict.keys())
     unmatched_target = set(target.nodes) - set(match_dict.values())
-    visualize_matching(source, target, match_dict)
+    if visualize:
+        visualize_matching(source, target, match_dict)
+    # TODO: remove matched in-between nodes in both graphs
+    logger.info("time for node matching: %f sec." % (time.time() - start_time))
+    exit()
 
     return match_dict, unmatched_source, unmatched_target
 

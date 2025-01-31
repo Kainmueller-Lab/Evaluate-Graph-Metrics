@@ -1,4 +1,5 @@
 import sys
+import logging
 
 import networkx as nx
 from networkx.generators.atlas import graph_atlas
@@ -8,6 +9,11 @@ import time
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import pdb
+
+
+
+logger = logging.getLogger(__name__)
 
 
 def betti_0_number(G, H):
@@ -17,12 +23,12 @@ def betti_0_number(G, H):
 def betti_1_number(G):
     """
     Computes the Betti 1 number (number of independent cycles) of a graph.
-    
+
     Parameters:
     ----------
     G : networkx.Graph
         The input graph (undirected or directed).
-    
+
     Returns:
     -------
     int
@@ -31,7 +37,7 @@ def betti_1_number(G):
     num_edges = G.number_of_edges()
     num_nodes = G.number_of_nodes()
     num_components = nx.number_connected_components(G)
-    
+
     # Betti 1 number formula
     return num_edges - num_nodes + num_components
 
@@ -49,6 +55,7 @@ def compute_node_metrics(G, H, matched, FN, FP):
         "FP": len(false_positives),
     }
     return metrics
+
 
 def visualization(G, H, false_merges, false_splits, matched):
     # code structure is ready just need to add false splits and otner errors if needed. False merge is already included
@@ -256,20 +263,20 @@ def create_directed_graph(graph, root_type=None, roots=None):
 
         # take for each connected component the end point with largest radius as root
         connected_components = list(nx.connected_components(graph))
-        
+
         # iterate through all connected components
         for cc in connected_components:
             cc_graph = graph.subgraph(cc)
             if len(cc_graph.nodes) == 1:
                 continue
-            
+
             # get end nodes
             degree = cc_graph.degree()
             terminal_idx = []
             for k, item in degree:
                 if item == 1:
                     terminal_idx.append(k)
-            
+
             # get radius of end end nodes
             radius = nx.get_node_attributes(cc_graph, 'radius')
             terminal_radius = np.array([radius[k] for k in terminal_idx])
@@ -307,7 +314,7 @@ def read_graph_from_file(filename):
 
 
 def label_connected_components(graph):
-    
+
     # get connected components
     connected_components = list(
         nx.connected_components(graph.to_undirected(as_view=True)))
@@ -319,7 +326,7 @@ def label_connected_components(graph):
             graph.nodes[n]["tree_label"] = lbl
         lbl += 1
     node_labels = nx.get_node_attributes(graph, "tree_label")
-         
+
     return graph, node_labels
 
 
@@ -338,10 +345,152 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
         "match": gt_matches + pred_matches
     }
     df = pd.DataFrame(data=data)
-    print(df)
 
     fig = px.scatter_3d(df, x="x", y="y", z="z", color="match", symbol="graph",
                        size_max=4)
     fig.update_traces(marker={'size': 2})
     fig.show()
 
+
+def visualize_graph(graph):
+    edge_x = []
+    edge_y = []
+    edge_z = []
+    for edge in graph.edges():
+        x0, y0, z0 = graph.nodes[edge[0]]['coord']
+        x1, y1, z1 = graph.nodes[edge[1]]['coord']
+        edge_x.append(x0)
+        edge_x.append(x1)
+        edge_x.append(None)
+        edge_y.append(y0)
+        edge_y.append(y1)
+        edge_y.append(None)
+        edge_z.append(z0)
+        edge_z.append(z1)
+        edge_z.append(None)
+
+    edge_trace = go.Scatter3d(
+        x=edge_x, y=edge_y, z=edge_z,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines')
+
+    node_x = []
+    node_y = []
+    node_z = []
+    for node in graph.nodes():
+        x, y, z = graph.nodes[node]['coord']
+        node_x.append(x)
+        node_y.append(y)
+        node_z.append(z)
+
+    node_trace = go.Scatter3d(
+        x=node_x, y=node_y, z=node_z,
+        mode='markers',
+        hoverinfo='text',
+        marker=dict(
+            size=2,
+            line_width=2))
+
+    fig = go.Figure(data=[edge_trace, node_trace])
+    fig.show()
+
+
+def update_segment(graph, old_segment_ids, new_segment_pos):
+    # update one segment (from one root/branching point to another branching
+    # point/ end point with resampled points
+    npoints = len(graph.nodes)
+    succ = old_segment_ids[0]
+    cid = np.max(graph.nodes) + 1
+    cradius = graph.nodes[succ]["radius"] # TODO: interpolate radius
+    # insert new nodes and edges
+    for pos in new_segment_pos:
+        graph.add_node(cid, coord=pos, radius=cradius)
+        graph.add_edge(succ, cid)
+        succ = cid
+        cid += 1
+    # add last edge to original segment end point
+    graph.add_edge(succ, old_segment_ids[-1])
+
+    # remove nodes and edges from resampled segment
+    for cid in old_segment_ids[1:-1]:
+        graph.remove_node(cid)
+    if graph.has_edge(old_segment_ids[0], old_segment_ids[-1]):
+        graph.remove_edge(old_segment_ids[0], old_segment_ids[-1])
+
+    return graph
+
+
+# adapted from https://rdrr.io/cran/nat/src/R/neuron.R#sym-resample_segment
+def resample_segment(seg, stepsize):
+    if seg.shape[0] < 2:
+        return None
+    seg_xyz = seg[:, :3]
+    l = np.sum(np.sqrt(np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1)))
+    if l <= stepsize:
+        return None
+
+    internal_points = np.arange(stepsize, l, stepsize)
+    if internal_points[-1] == l:
+        internal_points = internal_points[:-1]
+
+    cumlength = np.insert(np.cumsum(np.sqrt(
+        np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1))), 0, 0)
+
+    seg_new = np.empty((len(internal_points), seg.shape[1]))
+    for i in range(seg.shape[1]):
+        if np.all(np.isfinite(seg[:, i])):
+            seg_new[:, i] = np.interp(internal_points, cumlength, seg[:, i])
+        else:
+            seg_new[:, i] = np.nan
+    return seg_new
+
+
+def resample_graph(graph, stepsize, visualize=False):
+    logger.info("resampling graph with stepsize %i" % stepsize)
+    # TODO: check given in-between points in interpolation
+    # TODO: interpolate radius
+    graph_resampled = graph.copy()
+    if visualize:
+        visualize_graph(graph)
+
+    # get roots
+    roots = [n for n, d in graph.in_degree() if d==0]
+    positions = nx.get_node_attributes(graph, 'coord')
+
+    # traverse tree
+    for root in roots:
+        start = root
+        next_starts = []
+        while graph.out_degree(start) > 0:
+            childs = list(graph.successors(start))
+            for child in childs:
+                # find complete segment up to the next branching point
+                segment_points = [start]
+                segment_pos = [positions[start]]
+                cnode = child
+                while graph.out_degree(cnode) == 1:
+                    segment_points.append(cnode)
+                    segment_pos.append(positions[cnode])
+                    cnode = list(graph.successors(cnode))[0]
+                segment_points.append(cnode)
+                segment_pos.append(positions[cnode])
+                # resample segment
+                segment_resampled = resample_segment(
+                    np.array(segment_pos), stepsize)
+                # add to resampled graph
+                if segment_resampled is not None:
+                    graph_resampled = update_segment(
+                        graph_resampled, segment_points, segment_resampled)
+
+                # if segment end point is branching point, add it as next start
+                if graph.out_degree(cnode) > 1:
+                    next_starts.append(cnode)
+            if len(next_starts) > 0:
+                start = next_starts.pop()
+            else:
+                break
+    if visualize:
+        visualize_graph(graph_resampled)
+
+    return graph_resampled
