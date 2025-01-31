@@ -10,6 +10,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
+def betti_0_number(G, H):
+    return np.abs(nx.number_connected_components(G.to_undirected()) - nx.number_connected_components(H.to_undirected()))
+
+
 def betti_1_number(G):
     """
     Computes the Betti 1 number (number of independent cycles) of a graph.
@@ -31,12 +35,12 @@ def betti_1_number(G):
     # Betti 1 number formula
     return num_edges - num_nodes + num_components
 
-def compute_node_metrics(G, H, matching):
-    G_nodes = set(G.nodes)
-    H_nodes = set(matching[n] for n in H.nodes if n in matching) # unmatched H.nodes are removed need to include the unmatched BP
+def compute_node_metrics(G, H, matched, FN, FP):
+    G_nodes = set(matched[n] for n in G.nodes if n in matched)
+    H_nodes = set(matched[n] for n in H.nodes if n in matched) # unmatched H.nodes are removed need to include the unmatched BP
 
-    false_negatives = G_nodes - H_nodes
-    false_positives = H_nodes - G_nodes # need to include the unmatched bp targets or H.nodes
+    false_negatives = FN
+    false_positives = FP # need to include the unmatched bp targets or H.nodes
     common_nodes = G_nodes & H_nodes
 
     metrics = {
@@ -46,11 +50,7 @@ def compute_node_metrics(G, H, matching):
     }
     return metrics
 
-
-import plotly.graph_objects as go
-
-
-def visualization(G, H, false_merges, false_splits, matching):
+def visualization(G, H, false_merges, false_splits, matched):
     # code structure is ready just need to add false splits and otner errors if needed. False merge is already included
     G_nodes = G.nodes()
     H_nodes = H.nodes()
@@ -134,31 +134,44 @@ def visualization(G, H, false_merges, false_splits, matching):
     fig.show()
 
 
-def compute_edge_metrics(G, H, matching):
+def compute_edge_metrics(G, H, matched, FN, FP ,visualize):
     """
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
     """
-    G_edges = set(G.edges)
-    H_edges = set([(matching[e[0]], matching[e[1]]) for e in H.edges if e[0] in matching and e[1] in matching])
+    G_edges = set([(matched[e[0]], matched[e[1]]) for e in G.edges if e[0] in matched and e[1] in matched])
+    H_edges = set([(matched[e[0]], matched[e[1]]) for e in H.edges if e[0] in matched and e[1] in matched])
 
     false_negatives = G_edges - H_edges  # False negatives
     false_positives = H_edges - G_edges  # False positives
     common_edges = G_edges & H_edges  # True positives
 
-    false_merges = set()
+    G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
+    false_merges_intra_component = set()
+    false_merges_inter_component = set()
     for fp_edge in false_positives:
         u, v =fp_edge
-        if u in G and v in G and not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
-            false_merges.add(fp_edge)
+        if G.has_node(u) and G.has_node(v):
+            if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
+                same_component = any(u in comp and v in comp for comp in G_components)
+                if same_component:
+                    false_merges_intra_component.add(fp_edge)
+                else:
+                    false_merges_inter_component.add(fp_edge)
 
+    total_false_merges = false_merges_intra_component | false_merges_inter_component
+    # print(len(total_false_merges))
+    # print(matched)
     H_copy = H.copy()
-    H_copy.remove_edges_from(false_merges)
+    H_copy.remove_edges_from(false_merges_intra_component)
     components_before = nx.number_weakly_connected_components(H)
     components_after = nx.number_weakly_connected_components(H_copy)
     false_splits = components_after - components_before
+    beta1= betti_0_number(G, H)
+    total_false_splits = false_splits + beta1
 
-    visualization(G, H, false_merges, false_splits, matching)
+    if visualize == True:
+        visualization(G, H, total_false_merges, total_false_splits, matched)
 
     #print("false_merges:", len(false_merges))
 
@@ -166,8 +179,8 @@ def compute_edge_metrics(G, H, matching):
         "TP": len(common_edges),
         "FN": len(false_negatives),
         "FP": len(false_positives),
-        "FM": len(false_merges),
-        "FS": false_splits
+        "FM": len(total_false_merges),
+        "FS": total_false_splits
     }
     return metrics
 

@@ -59,10 +59,10 @@ def main():
         matching_type = MatchingType.Nearest
     else:
         raise NotImplementedError
-    matching = match_graphs(source=G, target=H, matching_type=matching_type)
+    matched, FN, FP = match_graphs(source=G, target=H, matching_type=matching_type)
 
     # 3) Compute metrics wrt to source and matched target graph
-    results_dict = evaluate_all_metrics(G, H, matching)
+    results_dict = evaluate_all_metrics(G, H, matched, FN, FP)
 
     # 4) Print results
     for name, value in results_dict.items():

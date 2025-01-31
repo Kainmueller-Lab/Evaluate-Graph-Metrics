@@ -6,29 +6,29 @@ import torch.nn as nn
 # NOTE: Check out documentation of networkx for all available graph algorithms:
 # https://networkx.org/documentation/stable/reference/algorithms/index.html
 
-from project.utils import betti_1_number, compute_edge_metrics, compute_node_metrics
+from project.utils import betti_0_number, betti_1_number, compute_edge_metrics, compute_node_metrics
 from project.streetmover_distance import StreetMoverDistance
 
 
 class GraphMetrics:
     
     @staticmethod
-    def betti_0_error(G, H, matching=None):
+    def betti_0_error(G, H, matched, FN, FP):
         '''
         Counts the number of connected components in the graph G and H and computes the absolute difference
         '''
-        return np.abs(nx.number_connected_components(G.to_undirected()) - nx.number_connected_components(H.to_undirected()))
+        return betti_0_number(G, H)
 
     @staticmethod
-    def betti_1_error(G, H, matching):
+    def betti_1_error(G, H, matched, FN, FP):
         '''
         Counts the number of connected components in the graph G and H and computes the absolute difference
         '''
         return np.abs(betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))
 
     @staticmethod
-    def precision_edgewise(G, H, matching):
-        metrics = compute_edge_metrics(G, H, matching)
+    def precision_edgewise(G, H, matched, FN, FP):
+        metrics = compute_edge_metrics(G, H, matched, FN, FP, False)
         TP, FP, FM, FS, FN = metrics["TP"], metrics["FP"], metrics["FM"], metrics["FS"], metrics["FN"]
         print("false_merges:", FM)
         print("false_splits:", FS)
@@ -36,42 +36,45 @@ class GraphMetrics:
         return TP / (TP + FP) if TP + FP > 0 else 0
 
     @staticmethod
-    def recall_edge_wise(G, H, matching):
-        metrics = compute_edge_metrics(G, H, matching)
+    def recall_edgewise(G, H, matched, FN, FP):
+        metrics = compute_edge_metrics(G, H, matched, FN, FP, False)
         TP, FN = metrics["TP"], metrics["FN"]
         return TP / (TP + FN) if TP + FN > 0 else 0
 
     @staticmethod
-    def f1_score_edgewise(G, H, matching):
-        metrics = compute_edge_metrics(G, H, matching)
+    def f1_score_edgewise(G, H, matched, FN, FP):
+        metrics = compute_edge_metrics(G, H, matched, FN, FP, True)
         TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
         return 2 * TP / (2 * TP + FN + FP) if 2 * TP + FN + FP > 0 else 0
 
     @staticmethod
-    def precision_nodewise(G, H, matching):
-        metrics = compute_node_metrics(G, H, matching)
+    def precision_nodewise(G, H, matched, FN, FP):
+        metrics = compute_node_metrics(G, H, matched, FN, FP)
         TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
 
-        print("false_negatives:", FN)
+        print("false_negatives_nodewise:", FN)
+        print("false_positives_nodewise:", FP)
         return TP / (TP + FP) if TP + FP > 0 else 0
 
     @staticmethod
-    def recall_node_wise(G, H, matching):
-        metrics = compute_node_metrics(G, H, matching)
+    def recall_nodewise(G, H, matched, FN, FP):
+        metrics = compute_node_metrics(G, H, matched, FN, FP)
         TP, FN = metrics["TP"], metrics["FN"]
         return TP / (TP + FN) if TP + FN > 0 else 0
 
     @staticmethod
-    def f1_score_nodewise(G, H, matching):
-        metrics = compute_node_metrics(G, H, matching)
+    def f1_score_nodewise(G, H, matched, FN, FP):
+        metrics = compute_node_metrics(G, H, matched, FN, FP)
         TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
         return 2 * TP / (2 * TP + FN + FP) if 2 * TP + FN + FP > 0 else 0
+
+
 
 
     # NOTE: This might have long runtime.
     # TODO: Include tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
     @staticmethod
-    def graph_edit_distance(G, H, matching):
+    def graph_edit_distance(G, H, matched, FN, FP):
         '''
         Returns the graph edit distance between G and H. This is the generic method of networkx and does not use matching information.
         Long runtimes are expected for large graphs.
@@ -83,7 +86,7 @@ class GraphMetrics:
 
     
     @staticmethod
-    def street_mover_distance(G, H, matching):
+    def street_mover_distance(G, H, matched, FN, FP):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -129,9 +132,9 @@ class GraphMetrics:
         return cost[0]
 
 
-def evaluate_all_metrics(G, H, matching):
+def evaluate_all_metrics(G, H, matched, FN, FP):
     """
     Automatically evaluates all metrics in the class on the given graphs.
     Returns a dictionary with metric names and their values.
     """
-    return {name: method(G, H, matching) for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction)}
+    return {name: method(G, H, matched, FN, FP) for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction)}
