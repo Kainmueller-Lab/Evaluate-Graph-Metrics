@@ -11,7 +11,6 @@ import os
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 def get_arguments():
@@ -49,6 +48,10 @@ def get_arguments():
         "--visualize", action="store_true", default=False,
         help="flag to visualize intermediate steps"
     )
+    parser.add_argument(
+        "--debug", action="store_true", default=False,
+        help="flag to set logging to DEBUG"
+    )
 
     args = parser.parse_args()
     return args
@@ -56,6 +59,11 @@ def get_arguments():
 
 def main():
     args = get_arguments()
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     # 1) Load graphs with attributes
     # NOTE: We currently expect all graphs to be Branchings, see https://networkx.org/documentation/stable/reference/algorithms/tree.html
     if args.gt_fn is not None and args.pred_fn is not None:
