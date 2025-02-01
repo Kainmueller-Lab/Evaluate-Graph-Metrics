@@ -395,7 +395,7 @@ def match_hierarchical(source, target, visualize=False):
 
     # TODO: remove matched in-between nodes in both graphs
     source_reduced, target_reduced, matched_reduced = reduce_graphs(
-        source, target, matched)
+        source, target, match_dict)
     unmatched_source = set(source.nodes)-set(match_dict.keys())
     unmatched_target = set(target.nodes) - set(match_dict.values())
 

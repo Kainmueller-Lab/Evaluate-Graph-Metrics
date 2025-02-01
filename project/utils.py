@@ -532,20 +532,28 @@ def remove_segment_points(graph, roots, check_against, matched):
                 cnode = child
                 while graph.out_degree(cnode) == 1:
                     segment_points.append(cnode)
-                    segment_pos.append(positions[cnode])
                     cnode = list(graph.successors(cnode))[0]
                 segment_points.append(cnode)
+                segment_points = np.array(segment_points)
 
                 # check which nodes to remove
                 rm_nodes = []
                 for cn in segment_points:
                     if graph.out_degree(cn) == 1:
-                        if check_against.out_degree(matched[cn]) == 1:
+                        if cn in matched:
+                            if check_against.out_degree(matched[cn]) == 1:
+                                rm_nodes.append(cn)
+                        else:
                             rm_nodes.append(cn)
 
                 # remove segment points
                 if len(rm_nodes) > 0:
-                    # remove points
+                    for rm in rm_nodes:
+                        graph_reduced.remove_node(rm)
+                    keep_nodes = segment_points[
+                        np.isin(segment_points, rm_nodes, invert=True)]
+                    for i, cn in enumerate(keep_nodes[1:]):
+                        graph_reduced.add_edge(keep_nodes[i], keep_nodes[i+1])
 
                 # if segment end point is branching point, add it as next start
                 if graph.out_degree(cnode) > 1:
@@ -560,7 +568,11 @@ def remove_segment_points(graph, roots, check_against, matched):
 def reduce_graphs(gt, pred, matched, visualize=False):
     # reduce graph: remove points along segments
     # as long as they are not matched to a branching point
-    logger.info("resampling graph with stepsize %i" % stepsize)
+    logger.info("removing points along segments in graph")
+    logger.debug("len gt/pred: %i/%i" % (len(gt.nodes), len(pred.nodes)))
+    visualize=True
+    #if visualize:
+    #    visualize_graph(gt)
 
     # get roots
     gt_roots = [n for n, d in gt.in_degree() if d==0]
@@ -570,8 +582,20 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     # turn matching dict to have pred ids as keys
     matched_pred = {v: k for k, v in matched.items()}
     pred_reduced = remove_segment_points(pred, pred_roots, gt, matched_pred)
+    logger.debug("len gt/pred reduced: %i/%i" % (
+        len(gt_reduced.nodes), len(pred_reduced.nodes)))
+
+    # update matched
+    to_remove = []
+    for k, v in matched.items():
+        if k not in gt_reduced.nodes or v not in pred_reduced.nodes:
+            to_remove.append(k)
+    for rm in to_remove:
+        if k in matched:
+            del matched[k]
 
     if visualize:
         visualize_graph(gt_reduced)
+    return gt_reduced, pred_reduced, matched
 
 
