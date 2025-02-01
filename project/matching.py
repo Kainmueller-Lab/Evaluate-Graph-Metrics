@@ -75,6 +75,7 @@ def match_nearest(source, target):
             key=lambda target_node: np.linalg.norm(np.array(source_pos) - np.array(target_positions[target_node]))
         )
         match_dict[source_node] = closest_target_node
+        # remove closest target node from the set of all targets nodes
     unmatched_source = set()
     unmatched_target =set()
 
