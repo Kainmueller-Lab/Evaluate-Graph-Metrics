@@ -128,4 +128,3 @@ def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
 
     logger.info("time for metric computation: %f sec." % (time.time() - start_time))
     return metrics_dict
-
