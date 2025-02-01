@@ -45,6 +45,10 @@ def get_arguments():
         help="stepsize for resampling gt and pred graph for node matching"
     )
     parser.add_argument(
+        "--smd", action="store_true", default=False,
+        help="flag to compute wasserstein distance (smd)"
+    )
+    parser.add_argument(
         "--visualize", action="store_true", default=False,
         help="flag to visualize intermediate steps"
     )
@@ -102,9 +106,9 @@ def main():
         visualize=args.visualize)
 
     # 4) Compute metrics wrt to source and matched target graph
-    results_dict = evaluate_all_metrics(G, H, matched, FN, FP)
+    results_dict = evaluate_all_metrics(G, H, matched, FN, FP, smd=args.smd)
 
-    # 5) Print results
+    # 5) Print results / TODO: save as json or csv file
     for name, value in results_dict.items():
         print(f"{name}: {value}")
 

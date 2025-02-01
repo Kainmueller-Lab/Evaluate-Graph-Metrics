@@ -394,7 +394,6 @@ def match_hierarchical(source, target, visualize=False):
         visualize_matching(source, target, match_dict)
     # TODO: remove matched in-between nodes in both graphs
     logger.info("time for node matching: %f sec." % (time.time() - start_time))
-    exit()
 
     return match_dict, unmatched_source, unmatched_target
 

@@ -1,4 +1,6 @@
 import inspect
+import logging
+import time
 import networkx as nx
 import numpy as np
 import torch
@@ -10,21 +12,25 @@ from project.utils import betti_0_number, betti_1_number, compute_edge_metrics, 
 from project.streetmover_distance import StreetMoverDistance
 
 
+logger = logging.getLogger(__name__)
+
+
 class GraphMetrics:
-    
+
     @staticmethod
     def betti_0_error(G, H, matched, FN, FP):
         '''
         Counts the number of connected components in the graph G and H and computes the absolute difference
         '''
-        return betti_0_number(G, H)
+        return {"betti_0": betti_0_number(G, H)}
 
     @staticmethod
     def betti_1_error(G, H, matched, FN, FP):
         '''
         Counts the number of connected components in the graph G and H and computes the absolute difference
         '''
-        return np.abs(betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))
+        return {"betti_1": np.abs(
+            betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))}
 
     @staticmethod
     def precision_edgewise(G, H, matched, FN, FP):
@@ -33,8 +39,9 @@ class GraphMetrics:
         print("false_merges:", FM)
         print("false_splits:", FS)
         print("false_negatives:", FN)
-        return TP / (TP + FP) if TP + FP > 0 else 0
+        return {"precision_edgewise": TP / (TP + FP) if TP + FP > 0 else 0}
 
+    """
     @staticmethod
     def recall_edgewise(G, H, matched, FN, FP):
         metrics = compute_edge_metrics(G, H, matched, FN, FP, False)
@@ -46,30 +53,11 @@ class GraphMetrics:
         metrics = compute_edge_metrics(G, H, matched, FN, FP, True)
         TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
         return 2 * TP / (2 * TP + FN + FP) if 2 * TP + FN + FP > 0 else 0
-
-    @staticmethod
-    def precision_nodewise(G, H, matched, FN, FP):
-        metrics = compute_node_metrics(G, H, matched, FN, FP)
-        TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
-
-        print("false_negatives_nodewise:", FN)
-        print("false_positives_nodewise:", FP)
-        return TP / (TP + FP) if TP + FP > 0 else 0
-
-    @staticmethod
-    def recall_nodewise(G, H, matched, FN, FP):
-        metrics = compute_node_metrics(G, H, matched, FN, FP)
-        TP, FN = metrics["TP"], metrics["FN"]
-        return TP / (TP + FN) if TP + FN > 0 else 0
+    """
 
     @staticmethod
     def f1_score_nodewise(G, H, matched, FN, FP):
-        metrics = compute_node_metrics(G, H, matched, FN, FP)
-        TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
-        return 2 * TP / (2 * TP + FN + FP) if 2 * TP + FN + FP > 0 else 0
-
-
-
+        return compute_node_metrics(G, H, matched, FN, FP)
 
     # NOTE: This might have long runtime.
     # TODO: Include tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
@@ -80,11 +68,10 @@ class GraphMetrics:
         Long runtimes are expected for large graphs.
         '''
         if G.number_of_nodes() < 50: # ppply to small graphs only to avoid long runime.
-            return nx.graph_edit_distance(G, H)
+            return {"ted": nx.graph_edit_distance(G, H)}
         else:
-            return -1
+            return {"ted": -1}
 
-    
     @staticmethod
     def street_mover_distance(G, H, matched, FN, FP):
         '''
@@ -132,9 +119,19 @@ class GraphMetrics:
         return cost[0]
 
 
-def evaluate_all_metrics(G, H, matched, FN, FP):
+def evaluate_all_metrics(G, H, matched, FN, FP, smd=False, visualize=False):
     """
     Automatically evaluates all metrics in the class on the given graphs.
     Returns a dictionary with metric names and their values.
     """
-    return {name: method(G, H, matched, FN, FP) for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction)}
+    logger.info("start metrics computation")
+    start_time = time.time()
+    metrics_dict = {}
+    for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
+        if smd == False and name == "street_mover_distance":
+            continue
+        metrics_dict.update(method(G, H, matched, FN, FP))
+
+    logger.info("time for metric computation: %f sec." % (time.time() - start_time))
+    return metrics_dict
+

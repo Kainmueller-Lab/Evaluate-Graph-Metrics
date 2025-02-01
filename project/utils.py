@@ -9,8 +9,6 @@ import time
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pdb
-
 
 
 logger = logging.getLogger(__name__)
@@ -41,18 +39,28 @@ def betti_1_number(G):
     # Betti 1 number formula
     return num_edges - num_nodes + num_components
 
-def compute_node_metrics(G, H, matched, FN, FP):
-    G_nodes = set(matched[n] for n in G.nodes if n in matched)
-    H_nodes = set(matched[n] for n in H.nodes if n in matched) # unmatched H.nodes are removed need to include the unmatched BP
 
-    false_negatives = FN
-    false_positives = FP # need to include the unmatched bp targets or H.nodes
-    common_nodes = G_nodes & H_nodes
+def compute_node_metrics(G, H, matched, FN, FP):
+    G_nodes_matched = set(n for n in G.nodes if n in matched)
+    H_nodes_matched = set(matched[n] for n in H.nodes if n in matched)
+    # unmatched H.nodes are removed need to include the unmatched BP
+    num_TP = len(G_nodes_matched)
+    num_FN = len(FN)
+    num_FP = len(FP)
+    # need to include the unmatched bp targets or H.nodes
+
+    precision = num_TP / float(num_TP + num_FP) if num_TP + num_FP > 0 else 0
+    recall = num_TP / float(num_TP + num_FN) if num_TP + num_FN > 0 else 0
+    f1 = 2 * num_TP / float(2 * num_TP + num_FN + num_FP) if \
+            2 * num_TP + num_FN + num_FP > 0 else 0
 
     metrics = {
-        "TP": len(common_nodes),
-        "FN": len(false_negatives),
-        "FP": len(false_positives),
+        "TP_nodes": num_TP,
+        "FN_nodes": num_FN,
+        "FP_nodes": num_FP,
+        "precision_nodes": precision,
+        "recall_nodes": recall,
+        "f1_nodes": f1
     }
     return metrics
 
