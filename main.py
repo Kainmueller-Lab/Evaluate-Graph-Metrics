@@ -106,7 +106,8 @@ def main():
         visualize=args.visualize)
 
     # 4) Compute metrics wrt to source and matched target graph
-    results_dict = evaluate_all_metrics(G, H, matched, FN, FP, smd=args.smd)
+    results_dict = evaluate_all_metrics(
+        G, H, matched, FN, FP, smd=args.smd, visualize=args.visualize)
 
     # 5) Print results / TODO: save as json or csv file
     for name, value in results_dict.items():

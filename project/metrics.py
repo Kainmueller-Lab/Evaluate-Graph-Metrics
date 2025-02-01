@@ -33,27 +33,8 @@ class GraphMetrics:
             betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))}
 
     @staticmethod
-    def precision_edgewise(G, H, matched, FN, FP):
-        metrics = compute_edge_metrics(G, H, matched, FN, FP, False)
-        TP, FP, FM, FS, FN = metrics["TP"], metrics["FP"], metrics["FM"], metrics["FS"], metrics["FN"]
-        print("false_merges:", FM)
-        print("false_splits:", FS)
-        print("false_negatives:", FN)
-        return {"precision_edgewise": TP / (TP + FP) if TP + FP > 0 else 0}
-
-    """
-    @staticmethod
-    def recall_edgewise(G, H, matched, FN, FP):
-        metrics = compute_edge_metrics(G, H, matched, FN, FP, False)
-        TP, FN = metrics["TP"], metrics["FN"]
-        return TP / (TP + FN) if TP + FN > 0 else 0
-
-    @staticmethod
-    def f1_score_edgewise(G, H, matched, FN, FP):
-        metrics = compute_edge_metrics(G, H, matched, FN, FP, True)
-        TP, FP, FN = metrics["TP"], metrics["FP"], metrics["FN"]
-        return 2 * TP / (2 * TP + FN + FP) if 2 * TP + FN + FP > 0 else 0
-    """
+    def f1_score_edgewise(G, H, matched, FN, FP, visualize=False):
+        return compute_edge_metrics(G, H, matched, FN, FP, visualize=visualize)
 
     @staticmethod
     def f1_score_nodewise(G, H, matched, FN, FP):
@@ -130,7 +111,10 @@ def evaluate_all_metrics(G, H, matched, FN, FP, smd=False, visualize=False):
     for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
         if smd == False and name == "street_mover_distance":
             continue
-        metrics_dict.update(method(G, H, matched, FN, FP))
+        if visualize == True and name == "F1_score_edgewise":
+            metrics_dict.update(method(G, H, matched, FN, FP, visualize=visualize))
+        else:
+            metrics_dict.update(method(G, H, matched, FN, FP))
 
     logger.info("time for metric computation: %f sec." % (time.time() - start_time))
     return metrics_dict

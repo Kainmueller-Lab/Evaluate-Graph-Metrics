@@ -149,23 +149,28 @@ def visualization(G, H, false_merges, false_splits, matched):
     fig.show()
 
 
-def compute_edge_metrics(G, H, matched, FN, FP ,visualize):
+def compute_edge_metrics(G, H, matched, FN, FP, visualize=False):
     """
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
     """
-    G_edges = set([(matched[e[0]], matched[e[1]]) for e in G.edges if e[0] in matched and e[1] in matched])
-    H_edges = set([(matched[e[0]], matched[e[1]]) for e in H.edges if e[0] in matched and e[1] in matched])
+    G_edges_matched = set([(e[0], e[1]) for e in G.edges if e[0] in matched and e[1] in matched])
+    H_nodes_matched = np.unique(list(matched.values()))
+    H_edges_matched = set([(e[0], e[1]) for e in H.edges \
+                   if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
+    logger.debug("len matched edges for G and H: %i / %i" % (
+        len(G_edges_matched), len(H_edges_matched)))
 
-    false_negatives = G_edges - H_edges  # False negatives
-    false_positives = H_edges - G_edges  # False positives
-    common_edges = G_edges & H_edges  # True positives
+    num_FN = len(set(G.edges) - G_edges_matched)  # False negatives
+    false_positives = set(H.edges) - H_edges_matched  # False positives
+    num_FP = len(false_positives)
+    num_TP = len(G_edges_matched)
 
     G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
     false_merges_intra_component = set()
     false_merges_inter_component = set()
     for fp_edge in false_positives:
-        u, v =fp_edge
+        u, v = fp_edge
         if G.has_node(u) and G.has_node(v):
             #
             if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
@@ -191,12 +196,20 @@ def compute_edge_metrics(G, H, matched, FN, FP ,visualize):
 
     #print("false_merges:", len(false_merges))
 
+    precision = num_TP / float(num_TP + num_FP) if num_TP + num_FP > 0 else 0
+    recall = num_TP / float(num_TP + num_FN) if num_TP + num_FN > 0 else 0
+    f1 = 2 * num_TP / float(2 * num_TP + num_FN + num_FP) \
+            if 2 * num_TP + num_FN + num_FP > 0 else 0
+
     metrics = {
-        "TP": len(common_edges),
-        "FN": len(false_negatives),
-        "FP": len(false_positives),
+        "TP_edges": num_TP,
+        "FN_edges": num_FN,
+        "FP_edges": num_FP,
         "FM": len(total_false_merges),
-        "FS": total_false_splits
+        "FS": total_false_splits,
+        "precision_edges": precision,
+        "recall_edges": recall,
+        "f1_edges": f1
     }
     return metrics
 
