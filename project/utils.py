@@ -167,6 +167,7 @@ def compute_edge_metrics(G, H, matched, FN, FP ,visualize):
     for fp_edge in false_positives:
         u, v =fp_edge
         if G.has_node(u) and G.has_node(v):
+            #
             if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
                 same_component = any(u in comp and v in comp for comp in G_components)
                 if same_component:
