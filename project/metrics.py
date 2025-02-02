@@ -8,7 +8,8 @@ import torch.nn as nn
 # NOTE: Check out documentation of networkx for all available graph algorithms:
 # https://networkx.org/documentation/stable/reference/algorithms/index.html
 
-from project.utils import betti_0_number, betti_1_number, compute_edge_metrics, compute_node_metrics
+from project.utils import betti_0_number, betti_1_number, \
+        compute_edge_metrics, compute_node_metrics
 from project.streetmover_distance import StreetMoverDistance
 
 
@@ -18,32 +19,33 @@ logger = logging.getLogger(__name__)
 class GraphMetrics:
 
     @staticmethod
-    def betti_0_error(G, H, matched, FN, FP):
+    def betti_0_error(G, H):
         '''
-        Counts the number of connected components in the graph G and H and computes the absolute difference
+        Counts the number of connected components in the graph G and H
+        and computes the absolute difference.
         '''
         return {"betti_0": betti_0_number(G, H)}
 
     @staticmethod
-    def betti_1_error(G, H, matched, FN, FP):
+    def betti_1_error(G, H):
         '''
-        Counts the number of connected components in the graph G and H and computes the absolute difference
+        Computes the Betti 1 number (number of independent cycles) of a graph.
         '''
         return {"betti_1": np.abs(
             betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))}
 
     @staticmethod
-    def f1_score_edgewise(G, H, matched, FN, FP, visualize=False):
-        return compute_edge_metrics(G, H, matched, FN, FP, visualize=visualize)
+    def f1_score_edgewise(G, H, matched, visualize=False):
+        return compute_edge_metrics(G, H, matched, visualize=visualize)
 
     @staticmethod
-    def f1_score_nodewise(G, H, matched, FN, FP):
-        return compute_node_metrics(G, H, matched, FN, FP)
+    def f1_score_nodewise(G, H, matched):
+        return compute_node_metrics(G, H, matched)
 
     # NOTE: This might have long runtime.
     # TODO: Include tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
     @staticmethod
-    def graph_edit_distance(G, H, matched, FN, FP):
+    def graph_edit_distance(G, H, matched):
         '''
         Returns the graph edit distance between G and H. This is the generic method of networkx and does not use matching information.
         Long runtimes are expected for large graphs.
@@ -54,7 +56,7 @@ class GraphMetrics:
             return {"ted": -1}
 
     @staticmethod
-    def street_mover_distance(G, H, matched, FN, FP):
+    def street_mover_distance(G, H):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -100,7 +102,8 @@ class GraphMetrics:
         return cost[0]
 
 
-def evaluate_all_metrics(G, H, matched, FN, FP, smd=False, visualize=False):
+def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
+                         G_resampled=None, H_resampled=None):
     """
     Automatically evaluates all metrics in the class on the given graphs.
     Returns a dictionary with metric names and their values.
@@ -108,13 +111,20 @@ def evaluate_all_metrics(G, H, matched, FN, FP, smd=False, visualize=False):
     logger.info("start metrics computation")
     start_time = time.time()
     metrics_dict = {}
+
     for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
-        if smd == False and name == "street_mover_distance":
+        if smd == True and name == "street_mover_distance":
+            metrics_dict.update(method(
+                G_resampled if G_resampled is not None else G,
+                H_resampled if H_resampled is not None else H))
+        elif smd == False and name == "street_mover_distance":
             continue
-        if visualize == True and name == "F1_score_edgewise":
-            metrics_dict.update(method(G, H, matched, FN, FP, visualize=visualize))
+        elif visualize == True and name == "F1_score_edgewise":
+            metrics_dict.update(method(G, H, matched, visualize=visualize))
+        elif "betti" in name:
+            metrics_dict.update(method(G, H))
         else:
-            metrics_dict.update(method(G, H, matched, FN, FP))
+            metrics_dict.update(method(G, H, matched))
 
     logger.info("time for metric computation: %f sec." % (time.time() - start_time))
     return metrics_dict

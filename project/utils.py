@@ -40,9 +40,12 @@ def betti_1_number(G):
     return num_edges - num_nodes + num_components
 
 
-def compute_node_metrics(G, H, matched, FN, FP):
+def compute_node_metrics(G, H, matched):
     G_nodes_matched = set(n for n in G.nodes if n in matched)
     H_nodes_matched = set(matched[n] for n in H.nodes if n in matched)
+
+    FN = set(G.nodes) - set(matched.keys())
+    FP = set(H.nodes) - set(matched.values())
     # unmatched H.nodes are removed need to include the unmatched BP
     num_TP = len(G_nodes_matched)
     num_FN = len(FN)
@@ -149,7 +152,7 @@ def visualization(G, H, false_merges, false_splits, matched):
     fig.show()
 
 
-def compute_edge_metrics(G, H, matched, FN, FP, visualize=False):
+def compute_edge_metrics(G, H, matched, visualize=False):
     """
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
@@ -162,14 +165,14 @@ def compute_edge_metrics(G, H, matched, FN, FP, visualize=False):
         len(G_edges_matched), len(H_edges_matched)))
 
     num_FN = len(set(G.edges) - G_edges_matched)  # False negatives
-    false_positives = set(H.edges) - H_edges_matched  # False positives
-    num_FP = len(false_positives)
+    FP = set(H.edges) - H_edges_matched  # False positives
+    num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
     G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
     false_merges_intra_component = set()
     false_merges_inter_component = set()
-    for fp_edge in false_positives:
+    for fp_edge in FP:
         u, v = fp_edge
         if G.has_node(u) and G.has_node(v):
             #
@@ -445,6 +448,7 @@ def update_segment(graph, old_segment_ids, new_segment_pos):
 
 # adapted from https://rdrr.io/cran/nat/src/R/neuron.R#sym-resample_segment
 def resample_segment(seg, stepsize):
+    # TODO: if last resample point is close to end point of segment, discard it
     if seg.shape[0] < 2:
         return None
     seg_xyz = seg[:, :3]
@@ -540,7 +544,7 @@ def remove_segment_points(graph, roots, check_against, matched):
                 rm_nodes = []
                 for cn in segment_points:
                     if graph.out_degree(cn) == 1:
-                        if cn in matched:
+                        if cn in matched and matched[cn] in check_against.nodes:
                             if check_against.out_degree(matched[cn]) == 1:
                                 rm_nodes.append(cn)
                         else:
@@ -597,5 +601,4 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     if visualize:
         visualize_graph(gt_reduced)
     return gt_reduced, pred_reduced, matched
-
 

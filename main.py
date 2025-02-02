@@ -4,7 +4,8 @@ import argparse
 
 from project.metrics import evaluate_all_metrics
 from project.matching import match_graphs, MatchingType
-from project.utils import read_graph_from_file, resample_graph
+from project.utils import read_graph_from_file, resample_graph, reduce_graphs,\
+        visualize_matching
 from project.toydata import *
 import glob
 import os
@@ -77,9 +78,9 @@ def main():
         print("number of nodes in H:", H.number_of_nodes())
     else:
         G, H = two_trees()
-    #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
-    # 2) Resample both graphs to have same spacing
+    # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
     if args.resample:
         G_resampled = resample_graph(G, stepsize=args.resample_stepsize,
                                      visualize=args.visualize)
@@ -90,7 +91,8 @@ def main():
 
     # 3) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
-    # The matching variable is a dictionary that maps nodes in target graph to nodes in source graph.
+    # The matching variable is a dictionary that maps nodes in target graph to
+    # nodes in source graph.
     # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
     if args.matching == "hierarchical":
         matching_type = MatchingType.Hierarchical
@@ -99,17 +101,27 @@ def main():
     else:
         raise NotImplementedError
 
-    matched, FN, FP = match_graphs(
+    matched = match_graphs(
         source=G_resampled if args.resample else G,
         target=H_resampled if args.resample else H,
         matching_type=matching_type,
         visualize=args.visualize)
 
-    # 4) Compute metrics wrt to source and matched target graph
-    results_dict = evaluate_all_metrics(
-        G, H, matched, FN, FP, smd=args.smd, visualize=args.visualize)
+    # 4) Reduce graph to have only branching and end points and their matched counterparts
+    G_reduced, H_reduced, matched_reduced = reduce_graphs(
+        G, H, matched)
+    if args.visualize:
+        # TODO: add lines in visualization
+        visualize_matching(G_reduced, H_reduced, matched_reduced)
 
-    # 5) Print results / TODO: save as json or csv file
+    # 5) Compute metrics wrt to source and matched target graph
+    results_dict = evaluate_all_metrics(
+        G_reduced, H_reduced, matched, smd=args.smd, visualize=args.visualize,
+        G_resampled=G_resampled if args.resample else G,
+        H_resampled=H_resampled if args.resample else H
+    )
+
+    # 6) Print results / TODO: save as json or csv file
     for name, value in results_dict.items():
         print(f"{name}: {value}")
 
