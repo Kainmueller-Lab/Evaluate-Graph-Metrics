@@ -601,4 +601,3 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     if visualize:
         visualize_graph(gt_reduced)
     return gt_reduced, pred_reduced, matched
-
