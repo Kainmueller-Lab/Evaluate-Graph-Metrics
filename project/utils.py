@@ -174,28 +174,29 @@ def compute_edge_metrics(G, H, matched, visualize=False):
     false_merges_inter_component = set()
     for fp_edge in FP:
         u, v = fp_edge
-        if G.has_node(u) and G.has_node(v):
-            #
-            if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
-                same_component = any(u in comp and v in comp for comp in G_components)
-                if same_component:
-                    false_merges_intra_component.add(fp_edge)
-                else:
-                    false_merges_inter_component.add(fp_edge)
+        if H.has_edge(u, v):
+            if G.has_node(u) and G.has_node(v):
+                #
+                if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
+                    same_component = any(u in comp and v in comp for comp in G_components)
+                    if same_component:
+                        false_merges_intra_component.add(fp_edge)
+                    else:
+                        false_merges_inter_component.add(fp_edge)
 
     total_false_merges = false_merges_intra_component | false_merges_inter_component
     # print(len(total_false_merges))
     # print(matched)
     H_copy = H.copy()
-    H_copy.remove_edges_from(false_merges_intra_component)
+    H_copy.remove_edges_from(total_false_merges)
     components_before = nx.number_weakly_connected_components(H)
     components_after = nx.number_weakly_connected_components(H_copy)
-    false_splits = components_after - components_before
-    beta1= betti_0_number(G, H)
-    total_false_splits = false_splits + beta1
+    false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
+
+
 
     if visualize == True:
-        visualization(G, H, total_false_merges, total_false_splits, matched)
+        visualization(G, H, total_false_merges, false_splits, matched)
 
     #print("false_merges:", len(false_merges))
 
@@ -209,7 +210,7 @@ def compute_edge_metrics(G, H, matched, visualize=False):
         "FN_edges": num_FN,
         "FP_edges": num_FP,
         "FM": len(total_false_merges),
-        "FS": total_false_splits,
+        "FS": false_splits,
         "precision_edges": precision,
         "recall_edges": recall,
         "f1_edges": f1
