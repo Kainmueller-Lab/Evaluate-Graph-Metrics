@@ -242,7 +242,7 @@ def check_parent_tree_label(graph, node, pred_matched_labels):
     return parent_label
 
 
-def match_hierarchical(source, target, visualize=False):
+def match_hierarchical(source, target, visualize=True):
     start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}

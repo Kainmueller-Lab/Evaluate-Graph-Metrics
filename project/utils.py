@@ -375,6 +375,45 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
     fig = px.scatter_3d(df, x="x", y="y", z="z", color="match", symbol="graph",
                        size_max=4)
     fig.update_traces(marker={'size': 2})
+
+    edge_x_gt, edge_y_gt, edge_z_gt = [], [], []
+    edge_x_pred, edge_y_pred, edge_z_pred = [], [], []
+
+
+    for node1, node2 in gt_graph.edges:
+        pos1 = gt_graph.nodes[node1]['coord']
+        pos2 = gt_graph.nodes[node2]['coord']
+
+        edge_x_gt.extend([pos1[0], pos2[0], None])
+        edge_y_gt.extend([pos1[1], pos2[1], None])
+        edge_z_gt.extend([pos1[2], pos2[2], None])
+
+
+    for node1, node2 in pred_graph.edges:
+        pos1 = pred_graph.nodes[node1]['coord']
+        pos2 = pred_graph.nodes[node2]['coord']
+
+        edge_x_pred.extend([pos1[0], pos2[0], None])
+        edge_y_pred.extend([pos1[1], pos2[1], None])
+        edge_z_pred.extend([pos1[2], pos2[2], None])
+
+
+    fig.add_trace(go.Scatter3d(
+        x=edge_x_gt, y=edge_y_gt, z=edge_z_gt,
+        mode='lines',
+        line=dict(color='blue', width=2),
+        hoverinfo='none',
+        name='GT Edges'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=edge_x_pred, y=edge_y_pred, z=edge_z_pred,
+        mode='lines',
+        line=dict(color='blue', width=2),
+        hoverinfo='none',
+        name='Pred Edges'
+    ))
+
     fig.show()
 
 
@@ -473,7 +512,7 @@ def resample_segment(seg, stepsize):
     return seg_new
 
 
-def resample_graph(graph, stepsize, visualize=False):
+def resample_graph(graph, stepsize, visualize=True):
     logger.info("resampling graph with stepsize %i" % stepsize)
     # TODO: check given in-between points in interpolation
     # TODO: interpolate radius
@@ -570,14 +609,14 @@ def remove_segment_points(graph, roots, check_against, matched):
     return graph_reduced
 
 
-def reduce_graphs(gt, pred, matched, visualize=False):
+def reduce_graphs(gt, pred, matched, visualize=True):
     # reduce graph: remove points along segments
     # as long as they are not matched to a branching point
     logger.info("removing points along segments in graph")
     logger.debug("len gt/pred: %i/%i" % (len(gt.nodes), len(pred.nodes)))
     visualize=True
-    #if visualize:
-    #    visualize_graph(gt)
+    if visualize:
+       visualize_graph(gt)
 
     # get roots
     gt_roots = [n for n, d in gt.in_degree() if d==0]
