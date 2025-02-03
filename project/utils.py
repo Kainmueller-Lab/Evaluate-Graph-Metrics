@@ -76,7 +76,7 @@ def visualization(G, H, false_merges, false_splits, matched):
     G_edges = []
     H_edges = []
     FM = []  # False merges
-    FS = []  # False splits
+
 
 
     for edge in G.edges():
@@ -152,7 +152,7 @@ def visualization(G, H, false_merges, false_splits, matched):
     fig.show()
 
 
-def compute_edge_metrics(G, H, matched, visualize=False):
+def compute_edge_metrics(G, H, matched, visualize=True):
     """
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
@@ -164,8 +164,12 @@ def compute_edge_metrics(G, H, matched, visualize=False):
     logger.debug("len matched edges for G and H: %i / %i" % (
         len(G_edges_matched), len(H_edges_matched)))
 
-    num_FN = len(set(G.edges) - G_edges_matched)  # False negatives
-    FP = set(H.edges) - H_edges_matched  # False positives
+    # num_FN = len(set(G.edges) - G_edges_matched)  # False negatives
+    # FP = set(H.edges) - H_edges_matched  # False positives
+    # print(FP)
+    FN = G_edges_matched - H_edges_matched
+    FP = H_edges_matched - G_edges_matched
+    num_FN = len(FN)
     num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
@@ -174,23 +178,28 @@ def compute_edge_metrics(G, H, matched, visualize=False):
     false_merges_inter_component = set()
     for fp_edge in FP:
         u, v = fp_edge
+        x = next((s for s, t in matched.items() if t == u), None)
+        y = next((s for s, t in matched.items() if t == v), None)
+
+
         if H.has_edge(u, v):
-            if G.has_node(u) and G.has_node(v):
+            if G.has_node(x) and G.has_node(y):
                 #
-                if not (nx.has_path(G, source=u, target=v) or nx.has_path(G, source=v, target=u)):
-                    same_component = any(u in comp and v in comp for comp in G_components)
+                if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=x, target=y)):
+                    same_component = any(x in comp and y in comp for comp in G_components)
                     if same_component:
                         false_merges_intra_component.add(fp_edge)
                     else:
                         false_merges_inter_component.add(fp_edge)
 
     total_false_merges = false_merges_intra_component | false_merges_inter_component
+    #print(total_false_merges)
     # print(len(total_false_merges))
+    # print(G.edges)
+    # print(H.edges)
     # print(matched)
     H_copy = H.copy()
     H_copy.remove_edges_from(total_false_merges)
-    components_before = nx.number_weakly_connected_components(H)
-    components_after = nx.number_weakly_connected_components(H_copy)
     false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
 
 
@@ -512,7 +521,7 @@ def resample_segment(seg, stepsize):
     return seg_new
 
 
-def resample_graph(graph, stepsize, visualize=True):
+def resample_graph(graph, stepsize, visualize=False):
     logger.info("resampling graph with stepsize %i" % stepsize)
     # TODO: check given in-between points in interpolation
     # TODO: interpolate radius
@@ -609,12 +618,12 @@ def remove_segment_points(graph, roots, check_against, matched):
     return graph_reduced
 
 
-def reduce_graphs(gt, pred, matched, visualize=True):
+def reduce_graphs(gt, pred, matched, visualize=False):
     # reduce graph: remove points along segments
     # as long as they are not matched to a branching point
     logger.info("removing points along segments in graph")
     logger.debug("len gt/pred: %i/%i" % (len(gt.nodes), len(pred.nodes)))
-    visualize=True
+    visualize=False
     if visualize:
        visualize_graph(gt)
 

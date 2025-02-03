@@ -75,18 +75,19 @@ def match_nearest(source, target):
     if not source_positions or not target_positions:
         raise ValueError("Both source and target graphs must have 'coord' attributes for nodes.")
 
-    for source_node, source_pos in source_positions.items():
-        # Find the closest target node
-        closest_target_node = min(
-            target_positions.keys(),
-            key=lambda target_node: np.linalg.norm(np.array(source_pos) - np.array(target_positions[target_node]))
-        )
-        match_dict[source_node] = closest_target_node
-        # remove closest target node from the set of all targets nodes
-    unmatched_source = set()
-    unmatched_target =set()
+    target_nodes = list(target_positions.keys())  # Target node list
+    target_coords = np.array([target_positions[node] for node in target_nodes])  # Nx2 or Nx3 matrix of coordinates
 
-    return match_dict, unmatched_source, unmatched_target
+
+    target_kdtree = KDTree(target_coords)
+
+    # Find the closest target node
+    for source_node, source_pos in source_positions.items():
+        dist, idx = target_kdtree.query(source_pos)
+        closest_target_node = target_nodes[idx]
+        match_dict[source_node] = closest_target_node
+
+    return match_dict
 
 
 def match_nearest_within_radius(source, target):
@@ -242,7 +243,7 @@ def check_parent_tree_label(graph, node, pred_matched_labels):
     return parent_label
 
 
-def match_hierarchical(source, target, visualize=True):
+def match_hierarchical(source, target, visualize=False):
     start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}

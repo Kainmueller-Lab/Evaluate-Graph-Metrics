@@ -35,7 +35,7 @@ class GraphMetrics:
             betti_1_number(G.to_undirected()) - betti_1_number(H.to_undirected()))}
 
     @staticmethod
-    def f1_score_edgewise(G, H, matched, visualize=False):
+    def f1_score_edgewise(G, H, matched, visualize=True):
         return compute_edge_metrics(G, H, matched, visualize=visualize)
 
     @staticmethod
@@ -88,7 +88,7 @@ class GraphMetrics:
 
         smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None)
 
-        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=100)
+        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
 
         print(f"Number of points in Graph G: {len(y_pc)}")
         print(f"Number of points in Graph H: {len(output_pc)}")
@@ -99,7 +99,7 @@ class GraphMetrics:
         print("Any Inf in G:", torch.isinf(y_pc).any())
         print("Any Inf in H:", torch.isinf(output_pc).any())
 
-        return cost[0]
+        return {"smd":cost[0]}
 
 
 def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
@@ -114,9 +114,7 @@ def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
 
     for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
         if smd == True and name == "street_mover_distance":
-            metrics_dict.update(method(
-                G_resampled if G_resampled is not None else G,
-                H_resampled if H_resampled is not None else H))
+            metrics_dict.update(method(G, H))
         elif smd == False and name == "street_mover_distance":
             continue
         elif visualize == True and name == "F1_score_edgewise":
