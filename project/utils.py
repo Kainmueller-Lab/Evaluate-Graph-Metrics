@@ -185,7 +185,7 @@ def compute_edge_metrics(G, H, matched, visualize=True):
         if H.has_edge(u, v):
             if G.has_node(x) and G.has_node(y):
                 #
-                if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=x, target=y)):
+                if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=y, target=x)):
                     same_component = any(x in comp and y in comp for comp in G_components)
                     if same_component:
                         false_merges_intra_component.add(fp_edge)
@@ -242,7 +242,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             The undirected input graph.
         """
     # create graph
-    graph = nx.Graph()
+    graph = nx.DiGraph()
     # open swc file
     f = open(fn, "r")
     if scale_factor is None:
@@ -278,7 +278,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             radius=radius
         )
         if parent_id != -1:
-            graph.add_edge(node_id, parent_id)
+            graph.add_edge(parent_id, node_id)
 
 
     f.close()
@@ -319,6 +319,9 @@ def create_directed_graph(graph, root_type=None, roots=None):
             root_idx = terminal_idx[max_rad_idx]
             max_rad = terminal_radius[max_rad_idx]
 
+            # bfs_tree = nx.bfs_tree(cc_graph, root_idx)
+            # directed_graph = nx.compose(directed_graph, bfs_tree)
+
             # starting at node with largest radius and traverse through
             # connected component, add edges to directed graph
             visited = []
@@ -340,11 +343,13 @@ def read_graph_from_file(filename):
     graph = None
     if filename.endswith(".swc"):
         graph = create_graph_from_swc(filename)
+        #print(graph.edges())
     else:
         raise NotImplementedError
     # convert unordered graph to ordered graph here?
     # take endpoint with largest radius as root
-    graph = create_directed_graph(graph, root_type="largest_radius")
+    #graph = create_directed_graph(graph, root_type="largest_radius")
+
     return graph
 
 
