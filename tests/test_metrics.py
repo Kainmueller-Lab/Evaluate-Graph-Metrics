@@ -53,5 +53,58 @@ class TestMetrics(unittest.TestCase):
         self.assertAlmostEqual(result, 1.0, delta=0.001)
 
 
+from project.utils import compute_edge_metrics
+from project.toydata import basic_MS_example, merge_example, split_example_1, split_example_2
+
+class TestMergesAndSplits(unittest.TestCase):
+    def test_basic(self):
+        gt, pred = basic_MS_example()
+        matching = match_graphs(source=gt, target=pred, matching_type=MatchingType.Nearest)
+        metrics = compute_edge_metrics(gt, pred, matching, visualize=False)
+        false_merges = metrics["FM"]
+        false_splits = metrics["FS"]
+        self.assertEqual(false_merges, 1)
+        self.assertEqual(false_splits, 1)
+        
+
+    def test_false_merges(self):
+        gt, pred = merge_example()
+        matching = match_graphs(source=gt, target=pred, matching_type=MatchingType.Nearest)
+        metrics = compute_edge_metrics(gt, pred, matching, visualize=False)
+        false_merges = metrics["FM"]
+        false_splits = metrics["FS"]
+        num_FP = metrics["FP_edges"]
+        num_FN = metrics["FN_edges"]
+        self.assertEqual(num_FP, 6)
+        self.assertEqual(false_merges, 3)
+        self.assertEqual(num_FN, 0)
+        self.assertEqual(false_splits, 0)
+
+    def test_false_splits(self):
+        gt, pred = split_example_1()
+        matching = match_graphs(source=gt, target=pred, matching_type=MatchingType.Nearest)
+        metrics = compute_edge_metrics(gt, pred, matching, visualize=False)
+        false_merges = metrics["FM"]
+        false_splits = metrics["FS"]
+        num_FP = metrics["FP_edges"]
+        num_FN = metrics["FN_edges"]
+        self.assertEqual(num_FP, 2)
+        self.assertEqual(false_merges, 1)
+        self.assertEqual(num_FN, 2)
+        self.assertEqual(false_splits, 1)
+
+        gt, pred = split_example_2()
+        matching = match_graphs(source=gt, target=pred, matching_type=MatchingType.Nearest)
+        metrics = compute_edge_metrics(gt, pred, matching, visualize=False)
+        false_merges = metrics["FM"]
+        false_splits = metrics["FS"]
+        num_FP = metrics["FP_edges"]
+        num_FN = metrics["FN_edges"]
+        self.assertEqual(num_FP, 6)
+        self.assertEqual(false_merges, 5)
+        self.assertEqual(num_FN, 5)
+        self.assertEqual(false_splits, 4)
+
+
 if __name__ == "__main__":
     unittest.main()
