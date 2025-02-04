@@ -158,7 +158,10 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     Returns a dictionary with TP, FN, and FP values.
     """
     G_edges_matched = set([(e[0], e[1]) for e in G.edges if e[0] in matched and e[1] in matched])
+
     H_nodes_matched = np.unique(list(matched.values()))
+
+
     H_edges_matched = set([(e[0], e[1]) for e in H.edges \
                    if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
     logger.debug("len matched edges for G and H: %i / %i" % (
