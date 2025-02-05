@@ -183,8 +183,6 @@ def compute_edge_metrics(G, H, matched, visualize=True):
         u, v = fp_edge
         x = next((s for s, t in matched.items() if t == u), None)
         y = next((s for s, t in matched.items() if t == v), None)
-
-
         if H.has_edge(u, v):
             if G.has_node(x) and G.has_node(y):
                 #
