@@ -271,3 +271,55 @@ def split_example_2():
     H.add_edges_from(edges_H)
     return G, H
 
+
+import networkx as nx
+import random
+
+def generate_random_tree(n):
+    """
+    Generate a random tree with n nodes.
+    
+    The tree is constructed by adding nodes one by one and connecting each new node
+    to a random existing node (randomly growing a spanning tree).
+    """
+    if n < 1:
+        raise ValueError("Number of nodes must be at least 1")
+
+    G = nx.DiGraph()
+    G.add_node(0)  # Start with a single root node
+
+    for i in range(1, n):
+        parent = random.choice(list(G.nodes))  # Pick a random existing node
+        G.add_edge(parent, i)  # Connect new node to the chosen parent
+
+    return G
+
+
+def random_graphs(num_nodes=100):
+    coordinates = [10*np.random.randn(3) for i in range(num_nodes)]
+    noisy_coords = [coord + 0.2* np.random.randn(3) for coord in coordinates]
+
+    G = generate_random_tree(num_nodes)
+    H = generate_random_tree(num_nodes)
+
+    G_node_attrs = {
+        node_idx: {
+            'coord': coordinates[i],
+            'radius': 2 
+        }
+        for node_idx, i in enumerate(G.nodes)
+    }
+
+    H_node_attrs = {
+        node_idx: {
+            'coord': noisy_coords[i],
+            'radius': 2 
+        }
+        for node_idx, i in enumerate(H.nodes)
+    }
+
+    nx.set_node_attributes(G, G_node_attrs)
+    nx.set_node_attributes(H, H_node_attrs)
+
+    return G, H
+
