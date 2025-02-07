@@ -2,6 +2,9 @@ import math
 import torch
 import torch.nn as nn
 
+import numpy as np
+import ot
+
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
@@ -22,7 +25,10 @@ class StreetMoverDistance(nn.Module):
     
     def __init__(self, eps, max_iter, reduction='none'):
         super(StreetMoverDistance, self).__init__()
-        self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
+        # NOTE: The below SinkhornDistance implementation is faulty (see smd_analysis notebook).
+        # We use the implementation from POT package instead.
+        #self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
+        self.sinkhorn_distance = SinkhornDistance_POT()
 
     def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=200):
         y_pc = self.get_point_cloud(y_A, y_nodes, n_points)
@@ -146,6 +152,28 @@ def euclidean_distance(a, b):
     return math.sqrt((a - b).pow(2).sum().item())
 
 
+
+class SinkhornDistance_POT(nn.Module):
+    def __init__(self, regularization=0.1):
+        super(SinkhornDistance_POT, self).__init__()
+        self.regularization = regularization
+    
+    def forward(self, A, B):
+        def to_array(coords):
+            return np.array([coord for coord in coords])
+        A = to_array(A)
+        B = to_array(B)
+
+        # Compute pairwise distance matrix
+        M = ot.dist(A, B, metric='euclidean')
+        # Uniform weights (assume each point contributes equally)
+        w_A = np.ones(len(A)) / len(A)
+        w_B = np.ones(len(B)) / len(B)
+        # Compute Sinkhorn Distance (Regularized Optimal Transport)
+        S_dist = ot.sinkhorn2(w_A, w_B, M, self.regularization)
+        return S_dist, None, None
+        
+
 # From https://github.com/dfdazac/wassdistance
 class SinkhornDistance(nn.Module):
     r"""
@@ -222,7 +250,7 @@ class SinkhornDistance(nn.Module):
     
     def M(self, C, u, v):
         "Modified cost for logarithmic updates"
-        "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon$"
+        "$M_{ij} = (-c_{ij} + u_i + v_j) / epsilon$"
         return (-C + u.unsqueeze(-1) + v.unsqueeze(-2)) / self.eps
     
     @staticmethod
