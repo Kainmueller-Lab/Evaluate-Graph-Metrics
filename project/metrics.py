@@ -75,16 +75,18 @@ class GraphMetrics:
         G_nodes_tensor = torch.stack(G_nodes)
         H_nodes_tensor = torch.stack(H_nodes)
 
-        G_nodes_normalized = (G_nodes_tensor - G_nodes_tensor.min(dim=0).values) / (
-                    G_nodes_tensor.max(dim=0).values - G_nodes_tensor.min(dim=0).values)
-        H_nodes_normalized = (H_nodes_tensor - H_nodes_tensor.min(dim=0).values) / (
-                    H_nodes_tensor.max(dim=0).values - H_nodes_tensor.min(dim=0).values)
+        global_min = torch.min(G_nodes_tensor.min(dim=0).values, H_nodes_tensor.min(dim=0).values)
+        global_max = torch.max(G_nodes_tensor.max(dim=0).values, H_nodes_tensor.max(dim=0).values)
+
+
+        G_nodes_normalized = (G_nodes_tensor - global_min) / (global_max - global_min)
+        H_nodes_normalized = (H_nodes_tensor - global_min) / (global_max - global_min)
 
         G_nodes = [coord for coord in G_nodes_normalized]
         H_nodes = [coord for coord in H_nodes_normalized]
 
-        # print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
-        # print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
+        print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
+        print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
 
         smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None)
 

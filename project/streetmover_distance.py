@@ -24,7 +24,7 @@ class StreetMoverDistance(nn.Module):
         super(StreetMoverDistance, self).__init__()
         self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
 
-    def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=200):
+    def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=2000):
         y_pc = self.get_point_cloud(y_A, y_nodes, n_points)
         output_pc = self.get_point_cloud(output_A, output_nodes, n_points)
         sink_dist, P, C = self.sinkhorn_distance(y_pc, output_pc)
