@@ -23,12 +23,11 @@ class StreetMoverDistance(nn.Module):
         of axis (0, 0).
     """
     
-    def __init__(self, eps, max_iter, reduction='none'):
+    def __init__(self, eps, max_iter, reduction='mean', use_correct_sinkhorn_dist=True):
         super(StreetMoverDistance, self).__init__()
         # NOTE: The below SinkhornDistance implementation is faulty (see smd_analysis notebook).
         # We use the implementation from POT package instead.
-        #self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
-        self.sinkhorn_distance = SinkhornDistance_POT()
+        self.sinkhorn_distance = SinkhornDistance_POT() if use_correct_sinkhorn_dist else SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
 
     def forward(self, y_A, y_nodes, output_A, output_nodes, n_points=200):
         y_pc = self.get_point_cloud(y_A, y_nodes, n_points)

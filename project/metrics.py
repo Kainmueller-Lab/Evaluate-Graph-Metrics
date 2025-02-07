@@ -56,7 +56,7 @@ class GraphMetrics:
             return {"ted": -1}
 
     @staticmethod
-    def street_mover_distance(G, H, normalize=True):
+    def street_mover_distance_VF(G, H, normalize=True):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -96,7 +96,7 @@ class GraphMetrics:
             # print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
             # print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
 
-        smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None)
+        smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=False)
 
         (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
 
@@ -109,7 +109,65 @@ class GraphMetrics:
         print("Any Inf in G:", torch.isinf(y_pc).any())
         print("Any Inf in H:", torch.isinf(output_pc).any())
 
-        return {"smd":cost[0]}
+        return {"smd_VF":cost[0]}
+    
+
+
+    @staticmethod
+    def street_mover_distance_POT(G, H, normalize=True):
+        '''
+        Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
+        '''
+        G = G.to_undirected()
+        H = H.to_undirected()
+
+        G_adjacency = nx.to_numpy_array(G)
+        H_adjacency = nx.to_numpy_array(H)
+
+        G_coords = nx.get_node_attributes(G, 'coord')
+        H_coords = nx.get_node_attributes(H, 'coord')
+
+        G_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in G_coords.values()]
+        H_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in H_coords.values()]
+
+        if normalize:
+            G_nodes_tensor = torch.stack(G_nodes)
+            H_nodes_tensor = torch.stack(H_nodes)
+
+            def min_max(tensor_A, tensor_B):
+                # Compute element-wise minimum and maximum across both tensors
+                min_coords = torch.min(tensor_A, tensor_B)  # Nx3 minimum coordinates
+                max_coords = torch.max(tensor_A, tensor_B)  # Nx3 maximum coordinates
+                bbox_min = min_coords.min(dim=0).values
+                bbox_max = max_coords.max(dim=0).values
+                return bbox_min, bbox_max
+
+            def normalize(tensor, min, max):
+                return (tensor - min) / (max - min)
+            min, max = min_max(G_nodes_tensor, H_nodes_tensor)
+
+            G_nodes_normalized = normalize(G_nodes_tensor, min, max)
+            H_nodes_normalized = normalize(H_nodes_tensor, min, max)
+            G_nodes = [coord for coord in G_nodes_normalized]
+            H_nodes = [coord for coord in H_nodes_normalized]
+
+            # print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
+            # print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
+
+        smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=True)
+
+        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
+
+        print(f"Number of points in Graph G: {len(y_pc)}")
+        print(f"Number of points in Graph H: {len(output_pc)}")
+        print("Point Cloud G Shape:", y_pc.shape)
+        print("Point Cloud H Shape:", output_pc.shape)
+        print("Any NaN in G:", torch.isnan(y_pc).any())
+        print("Any NaN in H:", torch.isnan(output_pc).any())
+        print("Any Inf in G:", torch.isinf(y_pc).any())
+        print("Any Inf in H:", torch.isinf(output_pc).any())
+
+        return {"smd_POT":cost[0]}
 
 
 def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
@@ -123,9 +181,9 @@ def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
     metrics_dict = {}
 
     for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
-        if smd == True and name == "street_mover_distance":
+        if smd == True and name.startswith("street_mover_distance"):
             metrics_dict.update(method(G, H))
-        elif smd == False and name == "street_mover_distance":
+        elif smd == False and name.startswith("street_mover_distance"):
             continue
         elif visualize == True and name == "F1_score_edgewise":
             metrics_dict.update(method(G, H, matched, visualize=visualize))

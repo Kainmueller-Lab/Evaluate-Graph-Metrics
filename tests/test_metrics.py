@@ -95,14 +95,14 @@ class TestSinkhornDistance(unittest.TestCase):
 class TestSMD(unittest.TestCase):
         def test_trivial_smd(self):
             G, _ = two_trees() 
-            result = GraphMetrics.street_mover_distance(G, G, normalize=False)
+            result = GraphMetrics.street_mover_distance_POT(G, G, normalize=False)
             # NOTE: Strangely the error between identical graphs is quite high. Unclear yet why. - ck
-            self.assertAlmostEqual(result["smd"], 0.0, delta=0.4)
+            self.assertAlmostEqual(result["smd_POT"], 0.0, delta=0.4)
 
         def test_translated_smd(self):
             G, H = smd_graph()
-            result = GraphMetrics.street_mover_distance(G, H, normalize=False)
-            self.assertAlmostEqual(result["smd"], 1.0, delta=0.1)
+            result = GraphMetrics.street_mover_distance_POT(G, H, normalize=False)
+            self.assertAlmostEqual(result["smd_POT"], 1.0, delta=0.1)
 
         # def test_smd_normalization(self):
         #     N = 5
@@ -146,8 +146,8 @@ class TestSMD(unittest.TestCase):
                 return H
 
             t = 5 # TODO: This gets instable and 0 is returned when t is too large eg 20
-            result = GraphMetrics.street_mover_distance(G, translate_graph(t), normalize=False)
-            self.assertAlmostEqual(result["smd"], t, delta=0.1)
+            result = GraphMetrics.street_mover_distance_POT(G, translate_graph(t), normalize=False)
+            self.assertAlmostEqual(result["smd_POT"], t, delta=0.1)
             # result = GraphMetrics.street_mover_distance(G, H, normalize=True)
             # self.assertAlmostEqual(result["smd"], 1.0, delta=0.001)
 
@@ -187,12 +187,12 @@ class TestSMD(unittest.TestCase):
             B.add_nodes_from(nodes_B)
             B.add_edges_from(edges_B)
 
-            result = GraphMetrics.street_mover_distance(G, H, normalize=False)
-            self.assertAlmostEqual(result["smd"], T, delta=0.01)
-            original_smd = result["smd"]
+            result = GraphMetrics.street_mover_distance_POT(G, H, normalize=False)
+            self.assertAlmostEqual(result["smd_POT"], T, delta=0.01)
+            original_smd = result["smd_POT"]
 
-            result = GraphMetrics.street_mover_distance(A, B, normalize=False)
-            self.assertAlmostEqual(result["smd"], S*T, delta=0.4)
+            result = GraphMetrics.street_mover_distance_POT(A, B, normalize=False)
+            self.assertAlmostEqual(result["smd_POT"], S*T, delta=0.4)
 
 
 
