@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
+import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +389,7 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
 
     fig = px.scatter_3d(df, x="x", y="y", z="z", color="match", symbol="graph",
                        size_max=4)
-    fig.update_traces(marker={'size': 2})
+    fig.update_traces(marker={'size': 4})
 
     edge_x_gt, edge_y_gt, edge_z_gt = [], [], []
     edge_x_pred, edge_y_pred, edge_z_pred = [], [], []
@@ -424,7 +424,7 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
     fig.add_trace(go.Scatter3d(
         x=edge_x_pred, y=edge_y_pred, z=edge_z_pred,
         mode='lines',
-        line=dict(color='blue', width=2),
+        line=dict(color='black', width=2),
         hoverinfo='none',
         name='Pred Edges'
     ))
@@ -503,17 +503,19 @@ def update_segment(graph, old_segment_ids, new_segment_pos):
 
 # adapted from https://rdrr.io/cran/nat/src/R/neuron.R#sym-resample_segment
 def resample_segment(seg, stepsize):
-    # TODO: if last resample point is close to end point of segment, discard it
     if seg.shape[0] < 2:
         return None
     seg_xyz = seg[:, :3]
-    l = np.sum(np.sqrt(np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1)))
-    if l <= stepsize:
+    seg_len = np.sum(np.sqrt(np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1)))
+    if seg_len <= stepsize:
         return None
 
-    internal_points = np.arange(stepsize, l, stepsize)
-    if internal_points[-1] == l:
+    internal_points = np.arange(stepsize, seg_len, stepsize)
+    # if last resample point is close to end point of segment, discard it
+    if abs(internal_points[-1] - seg_len) < stepsize:
         internal_points = internal_points[:-1]
+        if len(internal_points) == 0:
+            return None
 
     cumlength = np.insert(np.cumsum(np.sqrt(
         np.sum(np.diff(seg_xyz, axis=0) ** 2, axis=1))), 0, 0)
@@ -573,11 +575,12 @@ def resample_graph(graph, stepsize, visualize=False):
                 break
     if visualize:
         visualize_graph(graph_resampled)
+    # maybe original and resampled in one visualization?
 
     return graph_resampled
 
 
-def remove_segment_points(graph, roots, check_against, matched):
+def remove_segment_points(graph, roots, check_against, matched, gt=False):
     graph_reduced = graph.copy()
     # traverse tree
     for root in roots:
@@ -597,11 +600,18 @@ def remove_segment_points(graph, roots, check_against, matched):
 
                 # check which nodes to remove
                 rm_nodes = []
-                for cn in segment_points:
+                for cn in segment_points[1:]:
                     if graph.out_degree(cn) == 1:
-                        if cn in matched and matched[cn] in check_against.nodes:
-                            if check_against.out_degree(matched[cn]) == 1:
-                                rm_nodes.append(cn)
+                        if cn in matched:
+                            if type(matched[cn]) in [int, np.int32, np.int64]:
+                                mnodes = np.array([matched[cn]])
+                            else:
+                                mnodes = np.array(matched[cn])
+                            if np.any(np.isin(mnodes, check_against.nodes)):
+                                mnodes_out_edges = np.array(
+                                    [check_against.out_degree(mn) for mn in mnodes])
+                                if np.all(mnodes_out_edges == 1):
+                                    rm_nodes.append(cn)
                         else:
                             rm_nodes.append(cn)
 
@@ -629,17 +639,36 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     # as long as they are not matched to a branching point
     logger.info("removing points along segments in graph")
     logger.debug("len gt/pred: %i/%i" % (len(gt.nodes), len(pred.nodes)))
-    visualize=False
-    if visualize:
-       visualize_graph(gt)
 
     # get roots
     gt_roots = [n for n, d in gt.in_degree() if d==0]
     pred_roots = [n for n, d in pred.in_degree() if d==0]
 
-    gt_reduced = remove_segment_points(gt, gt_roots, pred, matched)
+    # hack to cleanup matching dict in case of FM and FS
+    matched_pred_ids, pred_cnt = np.unique(list(matched.values()), return_counts=True)
+    n_matched_pred = matched_pred_ids[pred_cnt > 1]
+    for nm in n_matched_pred:
+        nm_out = pred.out_degree(nm)
+        if nm_out == 1:
+            continue
+        n_matched_gt = [k for k, v in matched.items() if v == nm ]
+        n_matched_gt_out = [gt.out_degree(k) for k in n_matched_gt]
+        print(n_matched_gt, n_matched_gt_out, pred.out_degree(nm))
+        if np.any(n_matched_gt_out == nm_out):
+            # remove all in between nodes
+            for ngt, ngtout in zip(n_matched_gt, n_matched_gt_out):
+                if ngtout == 1:
+                    del matched[ngt]
+
+    gt_reduced = remove_segment_points(gt, gt_roots, pred, matched, gt=True)
     # turn matching dict to have pred ids as keys
-    matched_pred = {v: k for k, v in matched.items()}
+    matched_pred = {}
+    for k, v in matched.items():
+        if v in matched_pred:
+            matched_pred[v].append(k)
+        else:
+            matched_pred[v] = [k]
+    #matched_pred = {v: k for k, v in matched.items()} # heads up, it is not 1:1 matched
     pred_reduced = remove_segment_points(pred, pred_roots, gt, matched_pred)
     logger.debug("len gt/pred reduced: %i/%i" % (
         len(gt_reduced.nodes), len(pred_reduced.nodes)))
@@ -652,7 +681,7 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     for rm in to_remove:
         if k in matched:
             del matched[k]
+    print("before passing to main: ", len(gt_reduced.nodes), len(pred_reduced.nodes))
 
-    if visualize:
-        visualize_graph(gt_reduced)
     return gt_reduced, pred_reduced, matched
+
