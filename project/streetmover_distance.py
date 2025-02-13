@@ -169,6 +169,7 @@ class SinkhornDistance_POT(nn.Module):
         # Compute pairwise distance matrix
         M = ot.dist(A, B, metric='euclidean')
         # Uniform weights (assume each point contributes equally)
+
         w_A = np.ones(len(A)) / len(A)
         w_B = np.ones(len(B)) / len(B)
         # Compute Sinkhorn Distance (Regularized Optimal Transport)
@@ -261,6 +262,7 @@ class SinkhornDistance(nn.Module):
         x_col = x.unsqueeze(-2)
         y_lin = y.unsqueeze(-3)
         C = torch.sum((torch.abs(x_col - y_lin)) ** p, -1)
+
         return C
     
     @staticmethod
