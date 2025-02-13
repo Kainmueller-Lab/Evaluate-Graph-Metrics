@@ -56,7 +56,7 @@ class GraphMetrics:
             return {"ted": -1}
 
     @staticmethod
-    def street_mover_distance_VF(G, H, normalize=True):
+    def street_mover_distance_VF(G, H, normalize=False):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -78,10 +78,10 @@ class GraphMetrics:
 
             def min_max(tensor_A, tensor_B):
                 # Compute element-wise minimum and maximum across both tensors
-                min_coords = torch.min(tensor_A, tensor_B)  # Nx3 minimum coordinates
-                max_coords = torch.max(tensor_A, tensor_B)  # Nx3 maximum coordinates
-                bbox_min = min_coords.min(dim=0).values
-                bbox_max = max_coords.max(dim=0).values
+
+
+                bbox_min = torch.cat((tensor_A, tensor_B), dim=0).min(dim=0).values
+                bbox_max = torch.cat((tensor_A, tensor_B), dim=0).max(dim=0).values
                 return bbox_min, bbox_max
 
             def normalize(tensor, min, max):
@@ -135,11 +135,9 @@ class GraphMetrics:
             H_nodes_tensor = torch.stack(H_nodes)
 
             def min_max(tensor_A, tensor_B):
-                # Compute element-wise minimum and maximum across both tensors
-                min_coords = torch.min(tensor_A, tensor_B)  # Nx3 minimum coordinates
-                max_coords = torch.max(tensor_A, tensor_B)  # Nx3 maximum coordinates
-                bbox_min = min_coords.min(dim=0).values
-                bbox_max = max_coords.max(dim=0).values
+
+                bbox_min = torch.cat((tensor_A, tensor_B), dim=0).min(dim=0).values
+                bbox_max = torch.cat((tensor_A, tensor_B), dim=0).max(dim=0).values
                 return bbox_min, bbox_max
 
             def normalize(tensor, min, max):
