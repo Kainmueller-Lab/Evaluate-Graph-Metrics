@@ -280,8 +280,8 @@ class TestToyData(unittest.TestCase):
             G_resampled=None,
             H_resampled=None
         )
-        self.assertAlmostEqual(results_dict["smd_VF"], 95949.25, delta=0.01)
-        self.assertAlmostEqual(results_dict["smd_POT"], 1.6538861e-07, delta=0.001)
+        self.assertAlmostEqual(results_dict["smd_faulty"], 95949.25, delta=0.001)
+        self.assertAlmostEqual(results_dict["smd_correct"], 77.465, delta=0.001)
     
 
 
