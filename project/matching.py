@@ -17,6 +17,7 @@ class MatchingType(Enum):
     Greedy = 3
     Greedy_with_parent = 4
     Hierarchical = 5
+    One_to_One = 6 # Matches to nearest candidate within radius and removes it from candidate list.
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
@@ -60,6 +61,8 @@ def match_graphs(source, target, matching_type, visualize=False):
     if matching_type == MatchingType.Hierarchical:
         return match_hierarchical(source=source, target=target,
                                   visualize=visualize)
+    if matching_type == MatchingType.One_to_One:
+        return match_one_to_one(source=source, target=target)
     #NOTE: in linajea https://www.nature.com/articles/s41587-022-01427-7 they
     # do hungarian matching on edges
     return {}
@@ -111,6 +114,44 @@ def match_nearest_within_radius(source, target):
             match_dict[source_node] = closest_target_node
 
     return match_dict
+
+
+def match_one_to_one(source, target):
+    """
+    Matches source nodes to the nearest available target node within a given radius.
+    Ensures a one-to-one matching: each target is used at most once.
+    """
+    match_dict = {}
+    source_positions = nx.get_node_attributes(source, 'coord')
+    source_radii = nx.get_node_attributes(source, 'radius')
+    target_positions = nx.get_node_attributes(target, 'coord')
+
+    target_nodes = list(target_positions.keys())  # Target node list
+    target_coords = np.array([target_positions[node] for node in target_nodes])  # Nx2 or Nx3 matrix of coordinates
+    target_kdtree = KDTree(target_coords)
+
+    match_dict = {}  # Store matched (source_idx, target_idx)
+    used_targets = set()  # Keep track of assigned target indices
+
+    for src_idx, src_point in source_positions.items():
+        # Query nearest target within radius
+        close_target_indices = target_kdtree.query_ball_point(src_point, source_radii[src_idx])
+        close_target_nodes = [target_nodes[idx] for idx in close_target_indices]
+
+        # Remove already matched targets
+        available_targets = [idx for idx in close_target_nodes if idx not in used_targets]
+
+        if available_targets:
+            # Find the closest available target
+            dists = [np.linalg.norm(src_point - target_positions[idx]) for idx in available_targets]
+            best_target_idx = available_targets[np.argmin(dists)]
+
+            # Store the match and mark target as used
+            match_dict[src_idx] = best_target_idx
+            used_targets.add(best_target_idx)
+
+    return match_dict
+
 
 
 def match_greedy(source, target):

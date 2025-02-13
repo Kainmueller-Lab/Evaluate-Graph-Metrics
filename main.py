@@ -33,7 +33,7 @@ def get_arguments():
     parser.add_argument(
         "--matching", type=str, default="hierarchical",
         choices=["hierarchical", "nearest", "nearest_with_radius", "greedy",
-                 "greedy_with_parent"], #TODO: check if we can unify here
+                 "greedy_with_parent", "one_to_one"], #TODO: check if we can unify here
         help="choose matching method to assign pred to gt nodes"
     )
     parser.add_argument(
@@ -81,7 +81,7 @@ def main():
         G = read_graph_from_file("tests/toygraph_GT.swc")
         H = read_graph_from_file("tests/toygraph_predicted.swc")
         # G = read_graph_from_file("tests/42_BP_GT.swc")
-        # H = read_graph_from_file("tests/43_BP.swc")
+        # H = read_graph_from_file("tests/42_BP.swc")
     assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
     # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
@@ -100,6 +100,8 @@ def main():
     # NOTE: This is not symmetric, match(G,H) in general does not equal match(H,G).
     if args.matching == "hierarchical":
         matching_type = MatchingType.Hierarchical
+    elif args.matching == "one_to_one":
+        matching_type = MatchingType.One_to_One
     elif args.matching == "nearest":
         matching_type = MatchingType.Nearest
     else:
