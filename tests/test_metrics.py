@@ -151,7 +151,7 @@ class TestSMD(unittest.TestCase):
                 return H
 
             t = 20
-            result = GraphMetrics.street_mover_distance(G, G_translated_by(t))
+            result = GraphMetrics.street_mover_distance(G, G_translated_by(t), normalize=False)
             self.assertAlmostEqual(result["smd_correct"], t, delta=0.001)
 
 
@@ -190,10 +190,10 @@ class TestSMD(unittest.TestCase):
             B.add_nodes_from(nodes_B)
             B.add_edges_from(edges_B)
 
-            result = GraphMetrics.street_mover_distance(G, H)
+            result = GraphMetrics.street_mover_distance(G, H, normalize=False)
             self.assertAlmostEqual(result["smd_correct"], T, delta=0.001)
 
-            result = GraphMetrics.street_mover_distance(A, B)
+            result = GraphMetrics.street_mover_distance(A, B, normalize=False)
             self.assertAlmostEqual(result["smd_correct"], S*T, delta=0.001)
 
 
@@ -280,8 +280,12 @@ class TestToyData(unittest.TestCase):
             G_resampled=None,
             H_resampled=None
         )
-        self.assertAlmostEqual(results_dict["smd_faulty"], 95949.25, delta=0.001)
-        self.assertAlmostEqual(results_dict["smd_correct"], 77.465, delta=0.001)
+        self.assertAlmostEqual(results_dict["smd_faulty"], 0.0004, delta=0.001)
+        self.assertAlmostEqual(results_dict["smd_correct"], 0.2483, delta=0.001)
+
+        # Not normalized values:
+        # self.assertAlmostEqual(results_dict["smd_faulty"], 95949.25, delta=0.001)
+        # self.assertAlmostEqual(results_dict["smd_correct"], 77.465, delta=0.001)
     
 
 
