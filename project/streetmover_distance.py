@@ -153,13 +153,16 @@ def euclidean_distance(a, b):
 
 
 class SinkhornDistance_POT(nn.Module):
-    def __init__(self, regularization=0.1):
+    def __init__(self, regularization=1): # TODO: Describe and fix default regul parameter
         super(SinkhornDistance_POT, self).__init__()
         self.regularization = regularization
     
     def forward(self, A, B):
         def to_array(coords):
-            return np.array([coord for coord in coords])
+            if isinstance(coords, torch.Tensor):
+                return coords.cpu().numpy()  # Convert tensor to NumPy safely
+            return np.array([coord for coord in coords], dtype=np.float32)  # Ensure consistent NumPy array
+        
         A = to_array(A)
         B = to_array(B)
 
@@ -169,7 +172,7 @@ class SinkhornDistance_POT(nn.Module):
         w_A = np.ones(len(A)) / len(A)
         w_B = np.ones(len(B)) / len(B)
         # Compute Sinkhorn Distance (Regularized Optimal Transport)
-        S_dist = ot.sinkhorn2(w_A, w_B, M, self.regularization)
+        S_dist = ot.emd2(w_A, w_B, M, self.regularization)
         return S_dist, None, None
         
 

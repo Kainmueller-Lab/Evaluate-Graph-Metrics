@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from project.utils import betti_0_number, betti_1_number, \
         compute_edge_metrics, compute_node_metrics
-from project.streetmover_distance import StreetMoverDistance
+from project.streetmover_distance import StreetMoverDistance, SinkhornDistance_POT
 
 
 logger = logging.getLogger(__name__)
@@ -54,67 +54,11 @@ class GraphMetrics:
             return {"ted": nx.graph_edit_distance(G, H)}
         else:
             return {"ted": -1}
-
-    @staticmethod
-    def street_mover_distance_VF(G, H, normalize=True):
-        '''
-        Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
-        '''
-        G = G.to_undirected()
-        H = H.to_undirected()
-
-        G_adjacency = nx.to_numpy_array(G)
-        H_adjacency = nx.to_numpy_array(H)
-
-        G_coords = nx.get_node_attributes(G, 'coord')
-        H_coords = nx.get_node_attributes(H, 'coord')
-
-        G_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in G_coords.values()]
-        H_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in H_coords.values()]
-
-        if normalize:
-            G_nodes_tensor = torch.stack(G_nodes)
-            H_nodes_tensor = torch.stack(H_nodes)
-
-            def min_max(tensor_A, tensor_B):
-                # Compute element-wise minimum and maximum across both tensors
-                min_coords = torch.min(tensor_A, tensor_B)  # Nx3 minimum coordinates
-                max_coords = torch.max(tensor_A, tensor_B)  # Nx3 maximum coordinates
-                bbox_min = min_coords.min(dim=0).values
-                bbox_max = max_coords.max(dim=0).values
-                return bbox_min, bbox_max
-
-            def normalize(tensor, min, max):
-                return (tensor - min) / (max - min)
-            min, max = min_max(G_nodes_tensor, H_nodes_tensor)
-
-            G_nodes_normalized = normalize(G_nodes_tensor, min, max)
-            H_nodes_normalized = normalize(H_nodes_tensor, min, max)
-            G_nodes = [coord for coord in G_nodes_normalized]
-            H_nodes = [coord for coord in H_nodes_normalized]
-
-            # print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
-            # print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
-
-        smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=False)
-
-        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
-
-        print(f"Number of points in Graph G: {len(y_pc)}")
-        print(f"Number of points in Graph H: {len(output_pc)}")
-        print("Point Cloud G Shape:", y_pc.shape)
-        print("Point Cloud H Shape:", output_pc.shape)
-        print("Any NaN in G:", torch.isnan(y_pc).any())
-        print("Any NaN in H:", torch.isnan(output_pc).any())
-        print("Any Inf in G:", torch.isinf(y_pc).any())
-        print("Any Inf in H:", torch.isinf(output_pc).any())
-
-        return {"smd_VF":cost[0]}
     
 
 
     @staticmethod
-    def street_mover_distance_POT(G, H, normalize=True):
+    def street_mover_distance(G, H):
         '''
         Taken from https://github.com/davide-belli/generative-graph-transformer/blob/master/metrics/streetmover_distance.py
         '''
@@ -130,44 +74,65 @@ class GraphMetrics:
         G_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in G_coords.values()]
         H_nodes = [torch.from_numpy(np.array(arr, dtype=np.float32)) for arr in H_coords.values()]
 
-        if normalize:
-            G_nodes_tensor = torch.stack(G_nodes)
-            H_nodes_tensor = torch.stack(H_nodes)
+        # NOTE: For debuggig
+        # if normalize:
+        #     G_nodes_tensor = torch.stack(G_nodes)
+        #     H_nodes_tensor = torch.stack(H_nodes)
 
-            def min_max(tensor_A, tensor_B):
-                # Compute element-wise minimum and maximum across both tensors
-                min_coords = torch.min(tensor_A, tensor_B)  # Nx3 minimum coordinates
-                max_coords = torch.max(tensor_A, tensor_B)  # Nx3 maximum coordinates
-                bbox_min = min_coords.min(dim=0).values
-                bbox_max = max_coords.max(dim=0).values
-                return bbox_min, bbox_max
+        #     def min_max(tensor_A, tensor_B):
+        #         # Concatenate both tensors to include all points
+        #         all_points = torch.cat([tensor_A, tensor_B], dim=0)
 
-            def normalize(tensor, min, max):
-                return (tensor - min) / (max - min)
-            min, max = min_max(G_nodes_tensor, H_nodes_tensor)
+        #         # Compute the bounding box
+        #         min = all_points.min(dim=0).values  # 1x3 - min x, y, z
+        #         max = all_points.max(dim=0).values  # 1x3 - max x, y, z
+        #         return min, max
+            
+        #     def normalize(tensor, min, max):
+        #         return (tensor - min) / (max - min)
+        #     min, max = min_max(G_nodes_tensor, H_nodes_tensor)
 
-            G_nodes_normalized = normalize(G_nodes_tensor, min, max)
-            H_nodes_normalized = normalize(H_nodes_tensor, min, max)
-            G_nodes = [coord for coord in G_nodes_normalized]
-            H_nodes = [coord for coord in H_nodes_normalized]
+        #     G_nodes_normalized = normalize(G_nodes_tensor, min, max)
+        #     H_nodes_normalized = normalize(H_nodes_tensor, min, max)
+        #     G_nodes = [coord for coord in G_nodes_normalized]
+        #     H_nodes = [coord for coord in H_nodes_normalized]
 
             # print(f"Normalized G_nodes range: {G_nodes_normalized.min(dim=0).values}, {G_nodes_normalized.max(dim=0).values}")
             # print(f"Normalized H_nodes range: {H_nodes_normalized.min(dim=0).values}, {H_nodes_normalized.max(dim=0).values}")
 
-        smd = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=True)
+            # For Debugging
+            # scale = 0.1
+            # G_nodes = [scale * node for node in G_nodes]
+            # H_nodes = [scale * node for node in H_nodes]
 
-        (y_pc, output_pc), cost = smd.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
+        # NOTE: Correct SMD implementation
+        smd_POT = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=True)
+        (y_pc, output_pc), cost_POT = smd_POT.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
 
-        print(f"Number of points in Graph G: {len(y_pc)}")
-        print(f"Number of points in Graph H: {len(output_pc)}")
-        print("Point Cloud G Shape:", y_pc.shape)
-        print("Point Cloud H Shape:", output_pc.shape)
-        print("Any NaN in G:", torch.isnan(y_pc).any())
-        print("Any NaN in H:", torch.isnan(output_pc).any())
-        print("Any Inf in G:", torch.isinf(y_pc).any())
-        print("Any Inf in H:", torch.isinf(output_pc).any())
+        # print(f"Number of points in Graph G: {len(y_pc)}")
+        # print(f"Number of points in Graph H: {len(output_pc)}")
+        # print("Point Cloud G Shape:", y_pc.shape)
+        # print("Point Cloud H Shape:", output_pc.shape)
+        # print("Any NaN in G:", torch.isnan(y_pc).any())
+        # print("Any NaN in H:", torch.isnan(output_pc).any())
+        # print("Any Inf in G:", torch.isinf(y_pc).any())
+        # print("Any Inf in H:", torch.isinf(output_pc).any())
 
-        return {"smd_POT":cost[0]}
+        # NOTE: Faulty SMD implementation used in Vesselformer and Trexplorer.
+        smd_VF = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=False)
+        (y_pc, output_pc), cost_VF = smd_VF.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
+
+        # print(f"Number of points in Graph G: {len(y_pc)}")
+        # print(f"Number of points in Graph H: {len(output_pc)}")
+        # print("Point Cloud G Shape:", y_pc.shape)
+        # print("Point Cloud H Shape:", output_pc.shape)
+        # print("Any NaN in G:", torch.isnan(y_pc).any())
+        # print("Any NaN in H:", torch.isnan(output_pc).any())
+        # print("Any Inf in G:", torch.isinf(y_pc).any())
+        # print("Any Inf in H:", torch.isinf(output_pc).any())
+
+        return {f"smd_correct": cost_POT[0],
+                f"smd_faulty": cost_VF[0]}
 
 
 def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,

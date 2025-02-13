@@ -78,6 +78,10 @@ def main():
         print("number of nodes in H:", H.number_of_nodes())
     else:
         G, H = two_trees()
+        G = read_graph_from_file("tests/toygraph_GT.swc")
+        H = read_graph_from_file("tests/toygraph_predicted.swc")
+        # G = read_graph_from_file("tests/42_BP_GT.swc")
+        # H = read_graph_from_file("tests/43_BP.swc")
     assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
     # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
