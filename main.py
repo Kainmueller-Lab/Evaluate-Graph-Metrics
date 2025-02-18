@@ -31,10 +31,19 @@ def get_arguments():
         help="path to output folder"
     )
     parser.add_argument(
-        "--matching", type=str, default="hierarchical",
+        "--matching", type=str, default="one_to_one",
         choices=["hierarchical", "nearest", "nearest_with_radius", "greedy",
                  "greedy_with_parent", "one_to_one"], #TODO: check if we can unify here
         help="choose matching method to assign pred to gt nodes"
+    )
+    parser.add_argument(
+        "--matching_dist", type=str, default="fixed",
+        choices=["radius", "fixed"],
+        help="specify if matching distance should be based on gt radius or fixed distance"
+    )
+    parser.add_argument(
+        "--max_distance", type=int, default=10,
+        help="maximal distance to match gt and pred points"
     )
     parser.add_argument(
         "--resample", action="store_true", default=False,
@@ -115,6 +124,8 @@ def main():
         source=G_resampled if args.resample else G,
         target=H_resampled if args.resample else H,
         matching_type=matching_type,
+        matching_dist=args.matching_dist,
+        max_distance=args.max_distance,
         visualize=args.visualize)
 
     # 4) Reduce graph to have only branching and end points and their matched counterparts
@@ -124,6 +135,9 @@ def main():
             H_resampled if args.resample else H,
             matched
         )
+        if args.visualize:
+            visualize_matching(G_reduced, H_reduced, matched_reduced)
+
 
     # 5) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(
