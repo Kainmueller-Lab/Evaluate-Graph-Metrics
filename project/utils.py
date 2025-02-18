@@ -44,8 +44,8 @@ def compute_node_metrics(G, H, matched):
     G_nodes_matched = set(n for n in G.nodes if n in matched)
     H_nodes_matched = set(matched[n] for n in H.nodes if n in matched)
 
-    FN = set(G.nodes) - set(matched.keys())
-    FP = set(H.nodes) - set(matched.values())
+    FN = set(G.nodes) - set(matched.values())
+    FP = set(H.nodes) - set(matched.keys())
     # unmatched H.nodes are removed need to include the unmatched BP
     num_TP = len(G_nodes_matched)
     num_FN = len(FN)
@@ -184,14 +184,16 @@ def compute_edge_metrics(G, H, matched, visualize=True):
         x = next((s for s, t in matched.items() if t == u), None)
         y = next((s for s, t in matched.items() if t == v), None)
         if H.has_edge(u, v):
-            if G.has_node(x) and G.has_node(y):
-                #
-                if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=y, target=x)):
-                    same_component = any(x in comp and y in comp for comp in G_components)
-                    if same_component:
-                        false_merges_intra_component.add(fp_edge)
-                    else:
-                        false_merges_inter_component.add(fp_edge)
+            if H.degree(u) > 1 and H.degree(v) > 1:
+                if G.has_node(x) and G.has_node(y):
+                    if G.degree(x) > 1 and G.degree(y) > 1:
+                    #
+                        if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=y, target=x)):
+                            same_component = any(x in comp and y in comp for comp in G_components)
+                            if same_component:
+                                false_merges_intra_component.add(fp_edge)
+                            else:
+                                false_merges_inter_component.add(fp_edge)
 
     total_false_merges = false_merges_intra_component | false_merges_inter_component
     #print(total_false_merges)
