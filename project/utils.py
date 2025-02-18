@@ -495,8 +495,9 @@ def update_segment(graph, old_segment_ids, new_segment_pos):
     # remove nodes and edges from resampled segment
     for cid in old_segment_ids[1:-1]:
         graph.remove_node(cid)
-    if graph.has_edge(old_segment_ids[0], old_segment_ids[-1]):
-        graph.remove_edge(old_segment_ids[0], old_segment_ids[-1])
+    if len(new_segment_pos) > 0:
+        if graph.has_edge(old_segment_ids[0], old_segment_ids[-1]):
+            graph.remove_edge(old_segment_ids[0], old_segment_ids[-1])
 
     return graph
 
@@ -565,6 +566,10 @@ def resample_graph(graph, stepsize, visualize=False):
                 if segment_resampled is not None:
                     graph_resampled = update_segment(
                         graph_resampled, segment_points, segment_resampled)
+                # if previous graph had smaller resampling rate, we need to delete points
+                if segment_resampled is None and len(segment_points) > 2:
+                    graph_resampled = update_segment(
+                        graph_resampled, segment_points, [])
 
                 # if segment end point is branching point, add it as next start
                 if graph.out_degree(cnode) > 1:

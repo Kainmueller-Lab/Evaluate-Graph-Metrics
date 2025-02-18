@@ -46,6 +46,10 @@ def get_arguments():
         help="stepsize for resampling gt and pred graph for node matching"
     )
     parser.add_argument(
+        "--reduce_graph", action="store_true", default=False,
+        help="flag to only keep branching points and end points and their matched counterparts"
+    )
+    parser.add_argument(
         "--smd", action="store_true", default=False,
         help="flag to compute wasserstein distance (smd)"
     )
@@ -108,15 +112,20 @@ def main():
         visualize=args.visualize)
 
     # 4) Reduce graph to have only branching and end points and their matched counterparts
-    G_reduced, H_reduced, matched_reduced = reduce_graphs(
-        G, H, matched)
-    if args.visualize:
-        # TODO: add lines in visualization
-        visualize_matching(G_reduced, H_reduced, matched_reduced)
+    if args.reduce_graph:
+        G_reduced, H_reduced, matched_reduced = reduce_graphs(
+            G_resampled if args.resample else G,
+            H_resampled if args.resample else H,
+            matched
+        )
 
     # 5) Compute metrics wrt to source and matched target graph
     results_dict = evaluate_all_metrics(
-        G_reduced, H_reduced, matched, smd=args.smd, visualize=args.visualize,
+        G_reduced if args.reduce_graph else G,
+        H_reduced if args.reduce_graph else H,
+        matched_reduced if args.reduce_graph else matched,
+        smd=args.smd,
+        visualize=args.visualize,
         G_resampled=G_resampled if args.resample else G,
         H_resampled=H_resampled if args.resample else H
     )
