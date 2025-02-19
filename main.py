@@ -95,7 +95,7 @@ def main():
         H = read_graph_from_file("tests/toygraph_predicted.swc")
         # G = read_graph_from_file("tests/42_BP_GT.swc")
         # H = read_graph_from_file("tests/42_BP.swc")
-    assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
     # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
     if args.resample:

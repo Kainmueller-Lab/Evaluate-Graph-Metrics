@@ -182,7 +182,7 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
-    G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
+    G_components = {frozenset(comp) for comp in nx.connected_components(G)}
     false_merges_intra_component = set()
     false_merges_inter_component = set()
     for fp_edge in FP:
@@ -209,7 +209,7 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     # print(matched)
     H_copy = H.copy()
     H_copy.remove_edges_from(total_false_merges)
-    false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
+    false_splits = np.abs(nx.number_connected_components(G) - nx.number_connected_components(H_copy))
 
 
 
@@ -251,7 +251,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             The undirected input graph.
         """
     # create graph
-    graph = nx.DiGraph()
+    graph = nx.Graph()
     # open swc file
     f = open(fn, "r")
     if scale_factor is None:
