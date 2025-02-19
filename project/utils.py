@@ -157,15 +157,14 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
     """
+
     G_edges_matched = set([(e[0], e[1]) for e in G.edges if e[0] in matched and e[1] in matched])
     unmatched_G = G.edges() - G_edges_matched
 
-
     H_nodes_matched = np.unique(list(matched.values()))
 
-
     H_edges_matched = set([(e[0], e[1]) for e in H.edges \
-                   if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
+                           if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
 
     unmatched_H = H.edges() - H_edges_matched
     logger.debug("len matched edges for G and H: %i / %i" % (
@@ -178,11 +177,12 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     FN = FN | unmatched_G
     FP = H_edges_matched - G_edges_matched
     FP = FP | unmatched_H
+
     num_FN = len(FN)
     num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
-    G_components = {frozenset(comp) for comp in nx.connected_components(G)}
+    G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
     false_merges_intra_component = set()
     false_merges_inter_component = set()
     for fp_edge in FP:
@@ -209,7 +209,7 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     # print(matched)
     H_copy = H.copy()
     H_copy.remove_edges_from(total_false_merges)
-    false_splits = np.abs(nx.number_connected_components(G) - nx.number_connected_components(H_copy))
+    false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
 
 
 
@@ -251,7 +251,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             The undirected input graph.
         """
     # create graph
-    graph = nx.Graph()
+    graph = nx.DiGraph()
     # open swc file
     f = open(fn, "r")
     if scale_factor is None:
@@ -401,6 +401,7 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
 
     edge_x_gt, edge_y_gt, edge_z_gt = [], [], []
     edge_x_pred, edge_y_pred, edge_z_pred = [], [], []
+    edge_x_match, edge_y_match, edge_z_match = [], [], []
 
 
     for node1, node2 in gt_graph.edges:
@@ -420,6 +421,14 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
         edge_y_pred.extend([pos1[1], pos2[1], None])
         edge_z_pred.extend([pos1[2], pos2[2], None])
 
+    for gt_node, pred_node in matched_dict.items():
+        pos_gt = gt_graph.nodes[gt_node]['coord']
+        pos_pred = pred_graph.nodes[pred_node]['coord']
+
+        edge_x_match.extend([pos_gt[0], pos_pred[0], None])
+        edge_y_match.extend([pos_gt[1], pos_pred[1], None])
+        edge_z_match.extend([pos_gt[2], pos_pred[2], None])
+
 
     fig.add_trace(go.Scatter3d(
         x=edge_x_gt, y=edge_y_gt, z=edge_z_gt,
@@ -435,6 +444,14 @@ def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"
         line=dict(color='black', width=2),
         hoverinfo='none',
         name='Pred Edges'
+    ))
+
+    fig.add_trace(go.Scatter3d(
+        x=edge_x_match, y=edge_y_match, z=edge_z_match,
+        mode='lines',
+        line=dict(color='red', width=3),
+        hoverinfo='none',
+        name='Matched Edges'
     ))
 
     fig.show()
