@@ -159,24 +159,16 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     """
 
     G_edges_matched = set([(e[0], e[1]) for e in G.edges if e[0] in matched and e[1] in matched])
-    unmatched_G = G.edges() - G_edges_matched
+    FN = G.edges() - G_edges_matched
 
     H_nodes_matched = np.unique(list(matched.values()))
 
     H_edges_matched = set([(e[0], e[1]) for e in H.edges \
                            if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
 
-    unmatched_H = H.edges() - H_edges_matched
+    FP = H.edges() - H_edges_matched
     logger.debug("len matched edges for G and H: %i / %i" % (
         len(G_edges_matched), len(H_edges_matched)))
-
-    # num_FN = len(set(G.edges) - G_edges_matched)  # False negatives
-    # FP = set(H.edges) - H_edges_matched  # False positives
-    # print(FP)
-    FN = G_edges_matched - H_edges_matched
-    FN = FN | unmatched_G
-    FP = H_edges_matched - G_edges_matched
-    FP = FP | unmatched_H
 
     num_FN = len(FN)
     num_FP = len(FP)

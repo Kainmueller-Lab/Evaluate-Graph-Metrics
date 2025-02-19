@@ -138,12 +138,22 @@ def main():
         if args.visualize:
             visualize_matching(G_reduced, H_reduced, matched_reduced)
 
-
     # 5) Compute metrics wrt to source and matched target graph
+    if args.reduce_graph:
+        G_for_comp = G_reduced
+        H_for_comp = H_reduced
+        matched_for_comp = matched_reduced
+    elif args.resample:
+        G_for_comp = G_resampled
+        H_for_comp = H_resampled
+        matched_for_comp = matched
+    else:
+        G_for_comp = G
+        H_for_comp = H
+        matched_for_comp = matched
+
     results_dict = evaluate_all_metrics(
-        G_reduced if args.reduce_graph else G,
-        H_reduced if args.reduce_graph else H,
-        matched_reduced if args.reduce_graph else matched,
+        G_for_comp, H_for_comp, matched_for_comp,
         smd=args.smd,
         visualize=args.visualize,
         G_resampled=G_resampled if args.resample else G,
