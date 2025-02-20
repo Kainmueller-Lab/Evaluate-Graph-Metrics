@@ -159,29 +159,34 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     """
 
     G_edges_matched = set([(e[0], e[1]) for e in G.edges if e[0] in matched and e[1] in matched])
-    FN = G.edges() - G_edges_matched
+
+
+
 
     H_nodes_matched = np.unique(list(matched.values()))
 
     H_edges_matched = set([(e[0], e[1]) for e in H.edges \
                            if e[0] in H_nodes_matched and e[1] in H_nodes_matched])
 
-    FP = H.edges() - H_edges_matched
+    FP = H.edges() - G_edges_matched
     logger.debug("len matched edges for G and H: %i / %i" % (
         len(G_edges_matched), len(H_edges_matched)))
 
+    FN = G.edges() - H_edges_matched
     num_FN = len(FN)
     num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
+    #print(FP)
+
     G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
     false_merges_intra_component = set()
     false_merges_inter_component = set()
-    for fp_edge in H_edges_matched:
+    for fp_edge in FP:
         u, v = fp_edge
         x = next((s for s, t in matched.items() if t == u), None)
         y = next((s for s, t in matched.items() if t == v), None)
-        if H.has_edge(u, v) or H.has_edge(v, u):
+        if H.has_edge(u, v):
             # if H.degree(u) > 1 and H.degree(v) > 1:
             if G.has_node(x) and G.has_node(y):
                 # if G.degree(x) > 1 and G.degree(y) > 1:
