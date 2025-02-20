@@ -42,7 +42,7 @@ def betti_1_number(G):
 
 def compute_node_metrics(G, H, matched):
     G_nodes_matched = set(n for n in G.nodes if n in matched.keys())
-    H_nodes_matched = set(matched[n] for n in H.nodes if n in matched.values())
+    H_nodes_matched = set(n for n in H.nodes if n in matched.values())
     
     FN = set(G.nodes) - G_nodes_matched # False Negatives: Nodes in GT that are not matched.
     FP = set(H.nodes) - H_nodes_matched # False Positives: Nodes in Pred that are not matched.
