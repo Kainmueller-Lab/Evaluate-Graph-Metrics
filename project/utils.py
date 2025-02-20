@@ -41,21 +41,20 @@ def betti_1_number(G):
 
 
 def compute_node_metrics(G, H, matched):
-    G_nodes_matched = set(n for n in G.nodes if n in matched)
-    H_nodes_matched = set(matched[n] for n in H.nodes if n in matched)
+    G_nodes_matched = set(n for n in G.nodes if n in matched.keys())
+    H_nodes_matched = set(matched[n] for n in H.nodes if n in matched.values())
+    
+    FN = set(G.nodes) - G_nodes_matched # False Negatives: Nodes in GT that are not matched.
+    FP = set(H.nodes) - H_nodes_matched # False Positives: Nodes in Pred that are not matched.
 
-    FN = set(G.nodes) - set(matched.values())
-    FP = set(H.nodes) - set(matched.keys())
-    # unmatched H.nodes are removed need to include the unmatched BP
     num_TP = len(G_nodes_matched)
     num_FN = len(FN)
     num_FP = len(FP)
-    # need to include the unmatched bp targets or H.nodes
 
-    precision = num_TP / float(num_TP + num_FP) if num_TP + num_FP > 0 else 0
-    recall = num_TP / float(num_TP + num_FN) if num_TP + num_FN > 0 else 0
-    f1 = 2 * num_TP / float(2 * num_TP + num_FN + num_FP) if \
-            2 * num_TP + num_FN + num_FP > 0 else 0
+    precision = num_TP / (num_TP + num_FP) if (num_TP + num_FP) > 0 else 0
+    recall = num_TP / (num_TP + num_FN) if (num_TP + num_FN) > 0 else 0
+    f1 = (2 * num_TP) / (2 * num_TP + num_FN + num_FP) if (2 * num_TP + num_FN + num_FP) > 0 else 0
+
 
     metrics = {
         "TP_nodes": num_TP,
@@ -152,7 +151,83 @@ def visualization(G, H, false_merges, false_splits, matched):
     fig.show()
 
 
+
 def compute_edge_metrics(G, H, matched, visualize=True):
+    """
+    Computes common edges (TP), false negatives (FN), and false positives (FP).
+    Returns a dictionary with TP, FN, and FP values.
+    """
+    # True Positives are edges in GT that are matched to an existing edge in Pred.
+    TP = [(v,w) for (v,w) in G.edges if v in matched.keys() and w in matched.keys() and H.has_edge(matched[v], matched[w])]
+    # False Negatives are edges in GT that are either (1) matched to a missing edge in Pred or (2) are unmatched (i.e. at least one node is unmatched).
+    G_edges_matched_but_H_edge_missing = [(v,w) for (v,w) in G.edges if v in matched.keys() and w in matched.keys() and not H.has_edge(matched[v], matched[w])]
+    G_edges_unmatched = [(v,w) for (v,w) in G.edges if v not in matched.keys() or w not in matched.keys()]
+    FN = G_edges_matched_but_H_edge_missing + G_edges_unmatched
+    # False Positives are edges in Pred that are either (1) matched to a missing edge in GT or (2) are unmatched (i.e. at least one node is unmatched).
+    match_in_G = lambda x: next((k for k, v in matched.items() if v == x), None)
+    H_edges_matched_but_G_edge_missing = [(y,z) for (y,z) in H.edges if y in matched.values() and z in matched.values() and not G.has_edge(match_in_G(y), match_in_G(z))]
+    H_edges_unmatched = [(y,z) for (y,z) in H.edges if y not in matched.values() or z not in matched.values()]
+    FP = H_edges_matched_but_G_edge_missing + H_edges_unmatched
+
+    num_FN = len(FN)
+    num_FP = len(FP)
+    num_TP = len(TP)
+
+    G_components = {frozenset(comp) for comp in nx.weakly_connected_components(G)}
+    false_merges_intra_component = set()
+    false_merges_inter_component = set()
+    for fp_edge in FP:
+        u, v = fp_edge
+        x = next((s for s, t in matched.items() if t == u), None)
+        y = next((s for s, t in matched.items() if t == v), None)
+        if H.has_edge(u, v):
+            # if H.degree(u) > 1 and H.degree(v) > 1:
+            if G.has_node(x) and G.has_node(y):
+                # if G.degree(x) > 1 and G.degree(y) > 1:
+                #
+                    if not (nx.has_path(G, source=x, target=y) or nx.has_path(G, source=y, target=x)):
+                        same_component = any(x in comp and y in comp for comp in G_components)
+                        if same_component:
+                            false_merges_intra_component.add(fp_edge)
+                        else:
+                            false_merges_inter_component.add(fp_edge)
+
+    total_false_merges = false_merges_intra_component | false_merges_inter_component
+    #print(total_false_merges)
+    # print(len(total_false_merges))
+    # print(G.edges)
+    # print(H.edges)
+    # print(matched)
+    H_copy = H.copy()
+    H_copy.remove_edges_from(total_false_merges)
+    false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
+
+
+
+    if visualize == True:
+        visualization(G, H, total_false_merges, false_splits, matched)
+
+    #print("false_merges:", len(false_merges))
+
+    precision = num_TP / float(num_TP + num_FP) if num_TP + num_FP > 0 else 0
+    recall = num_TP / float(num_TP + num_FN) if num_TP + num_FN > 0 else 0
+    f1 = 2 * num_TP / float(2 * num_TP + num_FN + num_FP) \
+            if 2 * num_TP + num_FN + num_FP > 0 else 0
+
+    metrics = {
+        "TP_edges": num_TP,
+        "FN_edges": num_FN,
+        "FP_edges": num_FP,
+        "FM": len(total_false_merges),
+        "FS": false_splits,
+        "precision_edges": precision,
+        "recall_edges": recall,
+        "f1_edges": f1
+    }
+    return metrics
+
+
+def compute_edge_metrics_old(G, H, matched, visualize=True):
     """
     Computes common edges (TP), false negatives (FN), and false positives (FP).
     Returns a dictionary with TP, FN, and FP values.
@@ -675,7 +750,7 @@ def reduce_graphs(gt, pred, matched, visualize=False):
             continue
         n_matched_gt = [k for k, v in matched.items() if v == nm ]
         n_matched_gt_out = [gt.out_degree(k) for k in n_matched_gt]
-        print(n_matched_gt, n_matched_gt_out, pred.out_degree(nm))
+        #print(n_matched_gt, n_matched_gt_out, pred.out_degree(nm))
         if np.any(n_matched_gt_out == nm_out):
             # remove all in between nodes
             for ngt, ngtout in zip(n_matched_gt, n_matched_gt_out):
