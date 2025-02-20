@@ -21,7 +21,8 @@ class MatchingType(Enum):
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
-def match_graphs(source, target, matching_type, visualize=False):
+def match_graphs(source, target, matching_type, matching_dist="fixed",
+                 max_distance=10, visualize=False):
     """
     Matches nodes from the source graph to nodes in the target graph based on the specified matching strategy.
 
@@ -62,7 +63,9 @@ def match_graphs(source, target, matching_type, visualize=False):
         return match_hierarchical(source=source, target=target,
                                   visualize=visualize)
     if matching_type == MatchingType.One_to_One:
-        return match_one_to_one(source=source, target=target)
+        return match_one_to_one(
+            source=source, target=target, matching_dist=matching_dist,
+            max_distance=max_distance, visualize=visualize)
     #NOTE: in linajea https://www.nature.com/articles/s41587-022-01427-7 they
     # do hungarian matching on edges
     return {}
@@ -116,42 +119,74 @@ def match_nearest_within_radius(source, target):
     return match_dict
 
 
-def match_one_to_one(source, target):
+def match_one_to_one(source, target, matching_dist="fixed",
+                     max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
     Ensures a one-to-one matching: each target is used at most once.
     """
     match_dict = {}
     source_positions = nx.get_node_attributes(source, 'coord')
+    source_nodes = list(source_positions.keys())
+    source_coords = np.array([source_positions[node] for node in source_nodes])
     source_radii = nx.get_node_attributes(source, 'radius')
-    target_positions = nx.get_node_attributes(target, 'coord')
+    source_radii = np.array([source_radii[k] for k in source_radii.keys()])
 
+    target_positions = nx.get_node_attributes(target, 'coord')
     target_nodes = list(target_positions.keys())  # Target node list
     target_coords = np.array([target_positions[node] for node in target_nodes])  # Nx2 or Nx3 matrix of coordinates
     target_kdtree = KDTree(target_coords)
 
     match_dict = {}  # Store matched (source_idx, target_idx)
-    used_targets = set()  # Keep track of assigned target indices
+    used_targets = []  # Keep track of assigned target indices
+    used_sources = []
 
-    for src_idx, src_point in source_positions.items():
-        # Query nearest target within radius
-        close_target_indices = target_kdtree.query_ball_point(src_point, source_radii[src_idx])
-        close_target_nodes = [target_nodes[idx] for idx in close_target_indices]
+    # get distance between all gt-pred pairs
+    if matching_dist == "fixed":
+        k_neighbors = target_kdtree.query_ball_point(
+            source_coords, [max_distance], return_length=True)
+        kd_dists, kd_indices = target_kdtree.query(
+            source_coords, k=max(k_neighbors), distance_upper_bound=max_distance)
+    elif matching_dist == "radius":
+        k_neighbors = target_kdtree.query_ball_point(
+            source_coords, source_radii, return_length=True)
+        kd_dists, kd_indices = target_kdtree.query(
+            source_coords, k=max(k_neighbors))
+    else:
+        raise NotImplementedError
+    dists = []
+    source_ids = []
+    target_ids = []
+    for i, (c_dists, c_ids) in enumerate(zip(kd_dists, kd_indices)):
+        if type(c_dists) in [float, np.float32, np.float64]:
+            c_dists = [c_dists]
+            c_ids = [c_ids]
+        for c_dist, c_id in zip(c_dists, c_ids):
+            if not np.isinf(c_dist):
+                dists.append(c_dist)
+                source_ids.append(i)
+                target_ids.append(c_id)
 
-        # Remove already matched targets
-        available_targets = [idx for idx in close_target_nodes if idx not in used_targets]
+    sort_idx = np.argsort(dists)
+    # sort dists and id lists in inreasing order
+    dists = np.array(dists)[sort_idx]
+    source_ids = np.array(source_ids)[sort_idx]
+    target_ids = np.array(target_ids)[sort_idx]
 
-        if available_targets:
-            # Find the closest available target
-            dists = [np.linalg.norm(src_point - target_positions[idx]) for idx in available_targets]
-            best_target_idx = available_targets[np.argmin(dists)]
+    # iterate through all gt-pred pairs
+    for c_dist, c_source, c_target in zip(dists, source_ids, target_ids):
+        c_source_nx = source_nodes[c_source]
+        c_target_nx = target_nodes[c_target]
+        # if nodes haven't been matched yet, match them
+        if c_source_nx not in used_sources and c_target_nx not in used_targets:
+            match_dict[c_source_nx] = c_target_nx
+            used_targets.append(c_target_nx)
+            used_sources.append(c_source_nx)
 
-            # Store the match and mark target as used
-            match_dict[src_idx] = best_target_idx
-            used_targets.add(best_target_idx)
+    if visualize:
+        visualize_matching(source, target, match_dict)
 
     return match_dict
-
 
 
 def match_greedy(source, target):
@@ -438,4 +473,3 @@ def match_hierarchical(source, target, visualize=False):
     logger.info("time for node matching: %f sec." % (time.time() - start_time))
 
     return match_dict
-

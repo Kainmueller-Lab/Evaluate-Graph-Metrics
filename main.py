@@ -31,10 +31,19 @@ def get_arguments():
         help="path to output folder"
     )
     parser.add_argument(
-        "--matching", type=str, default="hierarchical",
+        "--matching", type=str, default="one_to_one",
         choices=["hierarchical", "nearest", "nearest_with_radius", "greedy",
                  "greedy_with_parent", "one_to_one"], #TODO: check if we can unify here
         help="choose matching method to assign pred to gt nodes"
+    )
+    parser.add_argument(
+        "--matching_dist", type=str, default="fixed",
+        choices=["radius", "fixed"],
+        help="specify if matching distance should be based on gt radius or fixed distance"
+    )
+    parser.add_argument(
+        "--max_distance", type=int, default=10,
+        help="maximal distance to match gt and pred points"
     )
     parser.add_argument(
         "--resample", action="store_true", default=False,
@@ -44,6 +53,10 @@ def get_arguments():
     parser.add_argument(
         "--resample_stepsize", type=int, default=2,
         help="stepsize for resampling gt and pred graph for node matching"
+    )
+    parser.add_argument(
+        "--reduce_graph", action="store_true", default=False,
+        help="flag to only keep branching points and end points and their matched counterparts"
     )
     parser.add_argument(
         "--smd", action="store_true", default=False,
@@ -82,7 +95,7 @@ def main():
         H = read_graph_from_file("tests/toygraph_predicted.swc")
         # G = read_graph_from_file("tests/42_BP_GT.swc")
         # H = read_graph_from_file("tests/42_BP.swc")
-    assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
 
     # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
     if args.resample:
@@ -111,18 +124,38 @@ def main():
         source=G_resampled if args.resample else G,
         target=H_resampled if args.resample else H,
         matching_type=matching_type,
+        matching_dist=args.matching_dist,
+        max_distance=args.max_distance,
         visualize=args.visualize)
 
     # 4) Reduce graph to have only branching and end points and their matched counterparts
-    G_reduced, H_reduced, matched_reduced = reduce_graphs(
-        G, H, matched)
-    if args.visualize:
-        # TODO: add lines in visualization
-        visualize_matching(G_reduced, H_reduced, matched_reduced)
+    if args.reduce_graph:
+        G_reduced, H_reduced, matched_reduced = reduce_graphs(
+            G_resampled if args.resample else G,
+            H_resampled if args.resample else H,
+            matched
+        )
+        if args.visualize:
+            visualize_matching(G_reduced, H_reduced, matched_reduced)
 
     # 5) Compute metrics wrt to source and matched target graph
+    if args.reduce_graph:
+        G_for_comp = G_reduced
+        H_for_comp = H_reduced
+        matched_for_comp = matched_reduced
+    elif args.resample:
+        G_for_comp = G_resampled
+        H_for_comp = H_resampled
+        matched_for_comp = matched
+    else:
+        G_for_comp = G
+        H_for_comp = H
+        matched_for_comp = matched
+
     results_dict = evaluate_all_metrics(
-        G_reduced, H_reduced, matched, smd=args.smd, visualize=args.visualize,
+        G_for_comp, H_for_comp, matched_for_comp,
+        smd=args.smd,
+        visualize=args.visualize,
         G_resampled=G_resampled if args.resample else G,
         H_resampled=H_resampled if args.resample else H
     )
