@@ -67,88 +67,57 @@ def compute_node_metrics(G, H, matched):
     return metrics
 
 
-def visualization(G, H, false_merges, false_splits, matched):
-    # code structure is ready just need to add false splits and otner errors if needed. False merge is already included
-    G_nodes = G.nodes()
-    H_nodes = H.nodes()
+import numpy as np
+import pandas as pd
+import networkx as nx
+import plotly.express as px
+import plotly.graph_objects as go
 
-    G_edges = []
-    H_edges = []
-    FM = []  # False merges
+import numpy as np
+import pandas as pd
+import networkx as nx
+import plotly.express as px
 
+def visualization(gt_graph, pred_graph, false_merges, false_splits, matched_dict, title="Edge Visualization"):
+    edge_data = []
 
+    color_mapping = {
+        "GT": "blue",
+        "Pred": "black",
+        "Matched": "green",
+        "False Merge": "red"
+    }
 
-    for edge in G.edges():
-        node1, node2 = edge
-        node1_coord = G_nodes[node1]['coord']
-        node2_coord = G_nodes[node2]['coord']
-        G_edges.append([node1_coord.tolist(), node2_coord.tolist()])
+    for node1, node2 in gt_graph.edges:
+        pos1, pos2 = gt_graph.nodes[node1]['coord'], gt_graph.nodes[node2]['coord']
+        edge_data.append({"x": pos1[0], "y": pos1[1], "z": pos1[2], "type": "GT"})
+        edge_data.append({"x": pos2[0], "y": pos2[1], "z": pos2[2], "type": "GT"})
+        edge_data.append({"x": None, "y": None, "z": None, "type": "GT"})
 
+    for node1, node2 in pred_graph.edges:
+        pos1, pos2 = pred_graph.nodes[node1]['coord'], pred_graph.nodes[node2]['coord']
+        edge_data.append({"x": pos1[0], "y": pos1[1], "z": pos1[2], "type": "Pred"})
+        edge_data.append({"x": pos2[0], "y": pos2[1], "z": pos2[2], "type": "Pred"})
+        edge_data.append({"x": None, "y": None, "z": None, "type": "Pred"})
 
-    for edge in H.edges():
-        node1, node2 = edge
-        node1_coord = H_nodes[node1]['coord']
-        node2_coord = H_nodes[node2]['coord']
-        H_edges.append([node1_coord.tolist(), node2_coord.tolist()])
+    for gt_node, pred_node in matched_dict.items():
+        pos_gt, pos_pred = gt_graph.nodes[gt_node]['coord'], pred_graph.nodes[pred_node]['coord']
+        edge_data.append({"x": pos_gt[0], "y": pos_gt[1], "z": pos_gt[2], "type": "Matched"})
+        edge_data.append({"x": pos_pred[0], "y": pos_pred[1], "z": pos_pred[2], "type": "Matched"})
+        edge_data.append({"x": None, "y": None, "z": None, "type": "Matched"})
 
+    for fm in false_merges:
+        pos1, pos2 = pred_graph.nodes[fm[0]]['coord'], pred_graph.nodes[fm[1]]['coord']
+        edge_data.append({"x": pos1[0], "y": pos1[1], "z": pos1[2], "type": "False Merge"})
+        edge_data.append({"x": pos2[0], "y": pos2[1], "z": pos2[2], "type": "False Merge"})
+        edge_data.append({"x": None, "y": None, "z": None, "type": "False Merge"})
 
-    for edge in false_merges:
-        node1, node2 = edge
-        node1_coord = H_nodes[node1]['coord']
-        node2_coord = H_nodes[node2]['coord']
-        FM.append([node1_coord.tolist(), node2_coord.tolist()])
+    df = pd.DataFrame(edge_data)
 
-
-    fig = go.Figure()
-
-
-    for i, edge in enumerate(G_edges):
-        fig.add_trace(go.Scatter3d(
-            x=[edge[0][0], edge[1][0]],
-            y=[edge[0][1], edge[1][1]],
-            z=[edge[0][2], edge[1][2]],
-            mode='lines',
-            line=dict(color='green', width=3),
-            name="G_edges" if i == 0 else None,
-            showlegend=(i == 0)
-        ))
-
-
-    for i, edge in enumerate(H_edges):
-        fig.add_trace(go.Scatter3d(
-            x=[edge[0][0], edge[1][0]],
-            y=[edge[0][1], edge[1][1]],
-            z=[edge[0][2], edge[1][2]],
-            mode='lines',
-            line=dict(color='blue', width=3),
-            name="H_edges" if i == 0 else None,
-            showlegend=(i == 0)
-        ))
-
-
-    for i, edge in enumerate(FM):
-        fig.add_trace(go.Scatter3d(
-            x=[edge[0][0], edge[1][0]],
-            y=[edge[0][1], edge[1][1]],
-            z=[edge[0][2], edge[1][2]],
-            mode='lines',
-            line=dict(color='red', width=5),
-            name="False merge" if i == 0 else None,
-            showlegend=(i == 0)
-        ))
-
-
-    fig.update_layout(
-        title="Graph Visualization with Plotly",
-        scene=dict(
-            xaxis_title="X Axis",
-            yaxis_title="Y Axis",
-            zaxis_title="Z Axis"
-        ),
-        margin=dict(l=0, r=0, b=0, t=40)
-    )
-
+    fig = px.line_3d(df, x="x", y="y", z="z", color="type", title=title,
+                      color_discrete_map=color_mapping)
     fig.show()
+
 
 
 
@@ -219,7 +188,9 @@ def compute_edge_metrics(G, H, matched, visualize=True):
         "FN_edges": num_FN,
         "FP_edges": num_FP,
         "FM": len(total_false_merges),
+        "relative_FM": len(total_false_merges)/len(H.edges()),
         "FS": false_splits,
+        "relative_FS": false_splits / len(G.edges()),
         "precision_edges": precision,
         "recall_edges": recall,
         "f1_edges": f1
