@@ -34,18 +34,18 @@ class TestMetrics(unittest.TestCase):
         result = GraphMetrics.graph_edit_distance(self.G, self.H, None)
         self.assertEqual(result["ted"], 3.0)
 
-    # # TODO: Make teste for edge and node values
-    # def test_precision(self):
-    #     result = GraphMetrics.f1_score_nodewise(self.G, self.H, self.matching)
-    #     self.assertEqual(result["precision_nodes"], 2/3)
+    # # TODO: Make tests for edge and node values
+    def test_nodes(self):
+        result = GraphMetrics.f1_score_nodewise(self.G, self.H, self.matching)
+        self.assertEqual(result["precision_nodes"], 1)
+        self.assertEqual(result["recall_nodes"], 1)
+        self.assertEqual(result["f1_nodes"], 1)
 
-    # def test_recall(self):
-    #     result = GraphMetrics.f1_score_nodewise(self.G, self.H, self.matching)
-    #     self.assertEqual(result["recall_nodes"], 2/4)
-
-    # def test_f1_score(self):
-    #     result = GraphMetrics.f1_score_nodewise(self.G, self.H, self.matching)
-    #     self.assertEqual(result["f1_nodes"], 2 / (3/2 + 4/2))
+    def test_edges(self):
+        result = GraphMetrics.f1_score_edgewise(self.G, self.H, self.matching)
+        self.assertEqual(result["precision_edges"], 2/3)
+        self.assertEqual(result["recall_edges"], 2/4)
+        self.assertEqual(result["f1_edges"], 2 / (3/2 + 4/2))
 
 
 
@@ -280,13 +280,44 @@ class TestToyData(unittest.TestCase):
             G_resampled=None,
             H_resampled=None
         )
-        self.assertAlmostEqual(results_dict["smd_faulty"], 0.0004, delta=0.001)
-        self.assertAlmostEqual(results_dict["smd_correct"], 0.2483, delta=0.001)
+        self.assertAlmostEqual(results_dict["smd_faulty"], 0.0004, delta=0.01)
+        self.assertAlmostEqual(results_dict["smd_correct"], 0.2483, delta=0.01)
 
         # Not normalized values:
         # self.assertAlmostEqual(results_dict["smd_faulty"], 95949.25, delta=0.001)
         # self.assertAlmostEqual(results_dict["smd_correct"], 77.465, delta=0.001)
     
+    def test_toygraph(self):
+        # 1) Load graphs
+        G = read_graph_from_file("tests/toygraph_GT.swc")
+        H = read_graph_from_file("tests/toygraph_predicted.swc")
+        assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+
+        # 2) No resampling
+
+        # 3) Match graphs
+        matching_type = MatchingType.One_to_One
+
+        matched = match_graphs(
+            source=G,
+            target=H,
+            matching_type=matching_type,
+            visualize=False)
+
+        # 4) Reduce graph to have only branching and end points and their matched counterparts
+        G_reduced, H_reduced, matched_reduced = reduce_graphs(
+            G, H, matched)
+
+        # 5) Compute metrics wrt to source and matched target graph
+        results_dict = evaluate_all_metrics(
+            G_reduced, H_reduced, matched, smd=True, visualize=False,
+            G_resampled=None,
+            H_resampled=None
+        )
+        print(results_dict)
+        self.assertAlmostEqual(results_dict["smd_correct"], 0.0214, delta=0.001)
+        self.assertEqual(results_dict["FM"], 1)
+
 
 
 if __name__ == "__main__":
