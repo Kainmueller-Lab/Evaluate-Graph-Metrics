@@ -134,8 +134,7 @@ class GraphMetrics:
                 f"smd_faulty": cost_VF[0]}
 
 
-def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
-                         G_resampled=None, H_resampled=None):
+def evaluate_all_metrics(args, Gs, Hs, matcheds, smd=False, visualize=False):
     """
     Automatically evaluates all metrics in the class on the given graphs.
     Returns a dictionary with metric names and their values.
@@ -149,12 +148,24 @@ def evaluate_all_metrics(G, H, matched, smd=False, visualize=False,
             metrics_dict.update(method(G, H))
         elif smd == False and name.startswith("street_mover_distance"):
             continue
-        elif visualize == True and name == "F1_score_edgewise":
-            metrics_dict.update(method(G, H, matched, visualize=visualize))
-        elif "betti" in name:
-            metrics_dict.update(method(G, H))
-        else:
-            metrics_dict.update(method(G, H, matched))
+
+        for idx, (G, H, matched) in enumerate(zip(Gs, Hs, matcheds)):
+            logger.info(f"computing metric {name} for sample {idx}...")
+            if smd == True and name.startswith("street_mover_distance"):
+                metric = method(G, H)
+            elif smd == False and name.startswith("street_mover_distance"):
+                continue
+            elif visualize == True and name == "f1_score_edgewise":
+                metric = method(G, H, matched, visualize=visualize)
+            elif "betti" in name:
+                metric = method(G, H)
+            else:
+                metric = method(G, H, matched)
+
+            for k, v in metric.items():
+                metrics_dict.setdefault(k, []).append(v)
+        for k, v in metrics_dict.items():
+            metrics_dict[k] = np.mean(v)
 
     logger.info("time for metric computation: %f sec." % (time.time() - start_time))
     return metrics_dict

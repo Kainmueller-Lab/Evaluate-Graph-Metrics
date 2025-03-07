@@ -19,10 +19,18 @@ def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--gt_fn", type=str, dest="gt_fn", default=None,
-        help="path to ground truth folder"
+        help="path to ground truth file"
     )
     parser.add_argument(
         "--pred_fn", type=str, dest="pred_fn", default=None,
+        help="path to predicted file"
+    )
+    parser.add_argument(
+        "--gt_dir", type=str, dest="gt_dir", default=None,
+        help="path to ground truth folder"
+    )
+    parser.add_argument(
+        "--pred_dir", type=str, dest="pred_dir", default=None,
         help="path to predicted folder"
     )
 
@@ -85,26 +93,37 @@ def main():
     # 1) Load graphs with attributes
     # NOTE: We currently expect all graphs to be Branchings, see https://networkx.org/documentation/stable/reference/algorithms/tree.html
     if args.gt_fn is not None and args.pred_fn is not None:
-        G = read_graph_from_file(args.gt_fn)
-        print("number of nodes in G:", G.number_of_nodes())
-        H = read_graph_from_file(args.pred_fn)
-        print("number of nodes in H:", H.number_of_nodes())
+        Gs = [read_graph_from_file(args.gt_fn)]
+        Hs = [read_graph_from_file(args.pred_fn)]
+    elif args.gt_dir is not None and args.pred_dir is not None:
+        gt_fls = sorted(os.listdir(args.gt_dir))
+        pred_fls = sorted(os.listdir(args.pred_dir))
+        logger.debug(f"gt files: {gt_fls}, pred files: {pred_fls}")
+        assert len(gt_fls) > 0 and gt_fls == pred_fls, "lists of gt and pred files have to be identical and non-empty!"
+        Gs = [read_graph_from_file(os.path.join(args.gt_dir, gt)) for gt in gt_fls]
+        Hs = [read_graph_from_file(os.path.join(args.pred_dir, pred)) for pred in pred_fls]
     else:
         G, H = two_trees()
-        G = read_graph_from_file("tests/toygraph_GT.swc")
-        H = read_graph_from_file("tests/toygraph_predicted.swc")
-        # G = read_graph_from_file("tests/42_BP_GT.swc")
-        # H = read_graph_from_file("tests/42_BP.swc")
+        Gs = [read_graph_from_file("tests/toygraph_GT.swc")]
+        Hs = [read_graph_from_file("tests/toygraph_predicted.swc")]
     #assert nx.is_branching(G) and nx.is_branching(H), "Graphs must be branchings"
+    logger.debug(f"number of nodes in G: {[G.number_of_nodes() for G in Gs]}")
+    logger.debug(f"number of edges in G: {[G.number_of_edges() for G in Gs]}")
+    logger.debug(f"number of nodes in H: {[H.number_of_nodes() for H in Hs]}")
+    logger.debug(f"number of edges in H: {[H.number_of_edges() for H in Hs]}")
 
     # 2) Resample both graphs to have same spacing -> TODO: copy to matching?
     if args.resample:
-        G_resampled = resample_graph(G, stepsize=args.resample_stepsize,
-                                     visualize=args.visualize)
-        H_resampled = resample_graph(H, stepsize=args.resample_stepsize,
-                                    visualize=args.visualize)
-        logger.info("number of nodes in G resampled: %i" % G_resampled.number_of_nodes())
-        logger.info("number of nodes in H resampled: %i" % H_resampled.number_of_nodes())
+        Gs = [resample_graph(G, stepsize=args.resample_stepsize,
+                             visualize=args.visualize) for G in Gs]
+        Hs = [resample_graph(H, stepsize=args.resample_stepsize,
+                             visualize=args.visualize) for H in Hs]
+        logger.info(
+            "number of nodes in G resampled: %s",
+            [G.number_of_nodes() for G in Gs])
+        logger.info(
+            "number of nodes in H resampled: %s",
+            [H.number_of_nodes() for H in Hs])
 
     # 3) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
@@ -120,44 +139,36 @@ def main():
     else:
         raise NotImplementedError
 
-    matched = match_graphs(
-        source=G_resampled if args.resample else G,
-        target=H_resampled if args.resample else H,
-        matching_type=matching_type,
-        matching_dist=args.matching_dist,
-        max_distance=args.max_distance,
-        visualize=args.visualize)
+    matcheds = [
+        match_graphs(
+            source=G,
+            target=H,
+            matching_type=matching_type,
+            matching_dist=args.matching_dist,
+            max_distance=args.max_distance,
+            visualize=args.visualize)
+        for G, H in zip(Gs, Hs)
+    ]
+    logger.info(
+            "number of matched nodes: %s",
+            [len(matched) for matched in matcheds])
+    logger.info(
+            "number of unmatched nodes: %s",
+            [(G.number_of_nodes() - len(matched), H.number_of_nodes() - len(matched))
+             for G, H, matched in zip(Gs, Hs, matcheds)])
 
     # 4) Reduce graph to have only branching and end points and their matched counterparts
     if args.reduce_graph:
-        G_reduced, H_reduced, matched_reduced = reduce_graphs(
-            G_resampled if args.resample else G,
-            H_resampled if args.resample else H,
-            matched
-        )
+        Gs, Hs, matcheds = zip(*[reduce_graphs(G, H, matched) for G, H, m in zip(G, H, matcheds)])
         if args.visualize:
-            visualize_matching(G_reduced, H_reduced, matched_reduced)
+            visualize_matching(G[0], H[0], matched[0])
 
     # 5) Compute metrics wrt to source and matched target graph
-    if args.reduce_graph:
-        G_for_comp = G_reduced
-        H_for_comp = H_reduced
-        matched_for_comp = matched_reduced
-    elif args.resample:
-        G_for_comp = G_resampled
-        H_for_comp = H_resampled
-        matched_for_comp = matched
-    else:
-        G_for_comp = G
-        H_for_comp = H
-        matched_for_comp = matched
-
     results_dict = evaluate_all_metrics(
-        G_for_comp, H_for_comp, matched_for_comp,
+        args,
+        Gs, Hs, matcheds,
         smd=args.smd,
         visualize=args.visualize,
-        G_resampled=G_resampled if args.resample else G,
-        H_resampled=H_resampled if args.resample else H
     )
 
     # 6) Print results / TODO: save as json or csv file
