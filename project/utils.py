@@ -1,15 +1,24 @@
-import sys
+from functools import partial
 import logging
+import pdb
+import sys
+import time
 
+import napari
 import networkx as nx
 from networkx.generators.atlas import graph_atlas
 import numpy as np
-import napari
-import time
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pdb
+from scipy.optimize import linear_sum_assignment
+import torch
+
+from .vesselformer_metrics.box_ops import box_cxcyczwhd_to_xyxyzz, generalized_box_iou_3d
+from .vesselformer_metrics.box_ops_np import box_iou_np
+from .vesselformer_metrics.boxap import box_ap, get_indices_of_iou_for_each_metric, get_unique_iou_thresholds, iou_filter
+from .vesselformer_metrics.coco import COCOMetric
+
 
 logger = logging.getLogger(__name__)
 
@@ -753,3 +762,181 @@ def reduce_graphs(gt, pred, matched, visualize=False):
 
     return gt_reduced, pred_reduced, matched
 
+
+
+def compute_vesselformer_metrics(args, Gs, Hs, matcheds):
+    device = torch.device("cpu")
+    compute_node_metrics = True
+    compute_edge_metrics = True
+
+    max_det = 10000
+    metrics = tuple([COCOMetric(classes=['Node'], per_class=False, verbose=False, max_detection=(max_det,))])
+    iou_thresholds = get_unique_iou_thresholds(metrics)
+    iou_mapping = get_indices_of_iou_for_each_metric(iou_thresholds, metrics)
+    box_evaluator = box_ap(box_iou_np, iou_thresholds, max_detections=max_det)
+
+    node_ap_result = []
+    edge_ap_result = []
+    radius_result = []
+    for idx, (G, H, matched) in enumerate(zip(Gs, Hs, matcheds)):
+        logger.info(f"computing vesselformer metrics for sample {idx}")
+        n, e, r = compute_vesselformer_metrics_single(
+            G, H, matched, box_evaluator,
+            compute_node_metrics=compute_node_metrics,
+            compute_edge_metrics=compute_edge_metrics)
+        node_ap_result.extend(n)
+        edge_ap_result.extend(e)
+        radius_result.extend(r)
+
+    # accumulate AP score
+    node_metric_scores = {}
+    edge_metric_scores = {}
+    for metric_idx, metric in enumerate(metrics):
+        _filter = partial(iou_filter, iou_idx=iou_mapping[metric_idx])
+        if compute_node_metrics:
+            iou_filtered_results = list(map(_filter, node_ap_result))
+            score, curve = metric(iou_filtered_results)
+            if score is not None:
+                node_metric_scores.update(score)
+
+        if compute_edge_metrics:
+            iou_filtered_results = list(map(_filter, edge_ap_result))
+            score, curve = metric(iou_filtered_results)
+            if score is not None:
+                edge_metric_scores.update(score)
+
+    metrics = {}
+    for k, v in node_metric_scores.items():
+        metrics["node_"+ k] = v
+        logger.info(f"node_{k}, {v}")
+
+    for k, v in edge_metric_scores.items():
+        metrics["edge_"+ k] = v
+        logger.info(f"edge_{k}, {v}")
+
+    metrics["radius_MAE"] = torch.tensor(radius_result).mean()
+    logger.info(f"radius_MAE, %s", metrics["radius_MAE"])
+
+    return metrics
+
+
+def compute_vesselformer_metrics_single(
+        G, H, matched, box_evaluator, compute_node_metrics=True, compute_edge_metrics=True):
+
+    BOX_WIDTH = 0.2 * 64
+    EDGE_BOX_OFFSET = 0.1 * 64
+
+    G_nodes = list(G.nodes(data=True))
+    P_nodes = list(H.nodes(data=True))
+
+    G_edges = list(G.edges(data=False))
+    P_edges = list(H.edges(data=False))
+
+    node_ap_result = []
+    edge_ap_result = []
+    radius_result = []
+
+    # get mapping from node id to list index
+    nodes_mapping = {v[0]: k for k, v in enumerate(G_nodes)}
+    pred_nodes_mapping = {v[0]: k for k, v in enumerate(P_nodes)}
+
+    nodes = torch.tensor(
+        np.array([d[1]['coord'] for d in G_nodes]), dtype=torch.float)
+
+    logger.debug(f"gt nodes, {nodes.shape}, {nodes[:5]}")
+    gt_radius = torch.tensor(
+        np.array([d[1]['radius'] for d in G_nodes]), dtype=torch.float)
+    logger.debug(f"gt_radius, {gt_radius.shape}, {gt_radius[:5]}")
+
+    pred_nodes = torch.tensor(
+        np.array([d[1]['coord'] for d in P_nodes]), dtype=torch.float)
+    logger.debug(f"pred_nodes, {pred_nodes.shape}, {pred_nodes[:5]}")
+    pred_radius = torch.tensor(
+        np.array([d[1]['radius'] for d in P_nodes]), dtype=torch.float)
+    logger.debug(f"pred_radius, {pred_radius.shape}, {pred_radius[:5]}")
+
+    boxes = [torch.cat(
+        [nodes, BOX_WIDTH * torch.ones(nodes.shape, device=nodes.device)],
+        dim=-1).numpy()]
+    logger.debug(f"gt boxes, {boxes[0][:5]}")
+    pred_boxes = [torch.cat(
+        [pred_nodes, BOX_WIDTH * torch.ones(pred_nodes.shape, device=nodes.device)],
+        dim=-1).numpy()]
+    logger.debug(f"pred boxes, {pred_boxes[0][:5]}")
+
+    if compute_node_metrics:
+        boxes_class = [np.zeros(boxes[0].shape[0])]
+        pred_boxes_class = [np.zeros(pred_boxes[0].shape[0])]
+        pred_boxes_score = [np.ones(pred_boxes[0].shape[0])]
+        logger.info("computing coco node metrics")
+        node_ap_result = box_evaluator(
+            pred_boxes, pred_boxes_class, pred_boxes_score, boxes, boxes_class)
+
+    edges = []
+    for s, e in G_edges:
+        sp = nodes_mapping[s]
+        ep = nodes_mapping[e]
+        edges.append([sp, ep])
+    edges = torch.tensor(np.array(edges), dtype=torch.int64)
+    logger.debug(f"gt edges, {edges.shape}, {edges[:5]}")
+
+    pred_edges = []
+    for s, e in P_edges:
+        sp = pred_nodes_mapping[s]
+        ep = pred_nodes_mapping[e]
+        pred_edges.append([sp, ep])
+    pred_edges = torch.tensor(np.array(pred_edges), dtype=torch.int64)
+    logger.debug(f"pred_edges, {pred_edges.shape}, {pred_edges[:5]}")
+
+    edge_boxes = torch.stack([
+        nodes[edges[:, 0]],
+        nodes[edges[:, 1]]], dim=2)
+    logger.debug(f"gt edge boxes1, {edge_boxes[:5]}")
+    edge_boxes = torch.cat(
+        [torch.min(edge_boxes, dim=2)[0] - EDGE_BOX_OFFSET,
+         torch.max(edge_boxes, dim=2)[0] + EDGE_BOX_OFFSET],
+        dim=-1).numpy()
+    logger.debug(f"gt edge boxes2, {edge_boxes[:5]}")
+    edge_boxes = [edge_boxes[:, [0, 1, 3, 4, 2, 5]]]
+    logger.debug(f"gt edge boxes3, {edge_boxes[0][:5]}")
+
+    assert pred_edges.shape[0] > 0, "no predicted edges, not implemented yet"
+    pred_edge_boxes = torch.stack([
+        pred_nodes[pred_edges[:, 0]],
+        pred_nodes[pred_edges[:, 1]]], dim=2)
+    logger.debug(f"pred edge boxes1, {pred_edge_boxes[:5]}")
+    pred_edge_boxes = torch.cat(
+        [torch.min(pred_edge_boxes, dim=2)[0] - EDGE_BOX_OFFSET,
+         torch.max(pred_edge_boxes, dim=2)[0] + EDGE_BOX_OFFSET],
+        dim=-1).numpy()
+    logger.debug(f"pred edge boxes2, {pred_edge_boxes[:5]}")
+    pred_edge_boxes = [pred_edge_boxes[:, [0, 1, 3, 4, 2, 5]]]
+    logger.debug(f"pred edge boxes3, {pred_edge_boxes[0][:5]}")
+
+    if compute_edge_metrics:
+        edge_boxes_class = [np.zeros(edges.shape[0])]
+        pred_rels_class = [np.zeros(pred_edge_boxes[0].shape[0])]
+        pred_rels_score = [np.ones(pred_edge_boxes[0].shape[0])]
+        logger.info("computing coco edge metrics")
+
+        edge_ap_result = box_evaluator(
+            pred_edge_boxes, pred_rels_class, pred_rels_score, edge_boxes,
+            edge_boxes_class, convert_box=False)
+
+    # in the vesselformer code the radius is per edge, not per node, so I had to change it
+    # C = -generalized_box_iou_3d(box_cxcyczwhd_to_xyxyzz(torch.as_tensor(pred_edge_boxes[0])),
+    #                             box_cxcyczwhd_to_xyxyzz(torch.as_tensor(edge_boxes[0])),
+    #                             eps=1e-10)  # Adding eps to avoid divide by zero error
+    C = -generalized_box_iou_3d(box_cxcyczwhd_to_xyxyzz(torch.as_tensor(pred_boxes[0])),
+                                box_cxcyczwhd_to_xyxyzz(torch.as_tensor(boxes[0])),
+                                eps=1e-10)  # Adding eps to avoid divide by zero error
+    C = C.view(1, pred_boxes[0].shape[0], -1).cpu()
+    sizes = [len(boxes[0])]
+    indices = [linear_sum_assignment(c[i]) for i, c in enumerate(C.split(sizes, -1))]
+    mapping = [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in
+               indices]
+    gt_radius_mapped = gt_radius[mapping[0][1]]
+    pred_radius_mapped = pred_radius[mapping[0][0]]
+    radius_result.append(torch.nn.functional.l1_loss(gt_radius_mapped, pred_radius_mapped))
+
+    return node_ap_result, edge_ap_result, radius_result

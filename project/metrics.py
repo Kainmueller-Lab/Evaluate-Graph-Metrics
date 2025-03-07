@@ -9,7 +9,7 @@ import torch.nn as nn
 # https://networkx.org/documentation/stable/reference/algorithms/index.html
 
 from project.utils import betti_0_number, betti_1_number, \
-        compute_edge_metrics, compute_node_metrics
+        compute_edge_metrics, compute_node_metrics, compute_vesselformer_metrics
 from project.streetmover_distance import StreetMoverDistance, SinkhornDistance_POT
 
 
@@ -41,6 +41,10 @@ class GraphMetrics:
     @staticmethod
     def f1_score_nodewise(G, H, matched):
         return compute_node_metrics(G, H, matched)
+
+    @staticmethod
+    def vesselformer_metrics(args, Gs, Hs, matcheds):
+        return compute_vesselformer_metrics(args, Gs, Hs, matcheds)
 
     # NOTE: This might have long runtime.
     # TODO: Include tree edit distance implementation based on attributes and specific for trees. This should be more efficient than nx.graph_edit_distance.
@@ -144,9 +148,9 @@ def evaluate_all_metrics(args, Gs, Hs, matcheds, smd=False, visualize=False):
     metrics_dict = {}
 
     for name, method in inspect.getmembers(GraphMetrics, predicate=inspect.isfunction):
-        if smd == True and name.startswith("street_mover_distance"):
-            metrics_dict.update(method(G, H))
-        elif smd == False and name.startswith("street_mover_distance"):
+        if name.startswith("vesselformer_metrics"):
+            logger.info(f"computing metric {name}...")
+            metrics_dict.update(GraphMetrics.vesselformer_metrics(args, Gs, Hs, matcheds))
             continue
 
         for idx, (G, H, matched) in enumerate(zip(Gs, Hs, matcheds)):
@@ -159,6 +163,8 @@ def evaluate_all_metrics(args, Gs, Hs, matcheds, smd=False, visualize=False):
                 metric = method(G, H, matched, visualize=visualize)
             elif "betti" in name:
                 metric = method(G, H)
+            elif name.startswith("vesselformer_metrics"):
+                continue
             else:
                 metric = method(G, H, matched)
 

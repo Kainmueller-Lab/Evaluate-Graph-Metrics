@@ -1,3 +1,8 @@
 numpy
 plotly
 POT
+loguru==0.5.3
+monai==0.7.0
+pytorch-ignite
+scipy
+matplotlib
