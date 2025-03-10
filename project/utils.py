@@ -142,6 +142,7 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     FP = H_edges_matched_but_G_edge_missing + H_edges_unmatched
 
     num_FN = len(FN)
+    #print(FN)
     num_FP = len(FP)
     num_TP = len(TP)
 
@@ -218,6 +219,7 @@ def compute_edge_metrics_old(G, H, matched, visualize=True):
         len(G_edges_matched), len(H_edges_matched)))
 
     num_FN = len(FN)
+    #print(FN)
     num_FP = len(FP)
     num_TP = len(G_edges_matched)
 
@@ -288,7 +290,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             The undirected input graph.
         """
     # create graph
-    graph = nx.DiGraph()
+    graph = nx.Graph()
     # open swc file
     f = open(fn, "r")
     if scale_factor is None:
@@ -327,6 +329,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             graph.add_edge(parent_id, node_id)
 
     f.close()
+    #print(graph.edges())
     return graph
 
 
@@ -354,7 +357,7 @@ def create_directed_graph(graph, root_type=None, roots=None):
             degree = cc_graph.degree()
             terminal_idx = []
             for k, item in degree:
-                if item == 1:
+                if item >= 0:
                     terminal_idx.append(k)
 
             # get radius of end end nodes
@@ -362,6 +365,7 @@ def create_directed_graph(graph, root_type=None, roots=None):
             terminal_radius = np.array([radius[k] for k in terminal_idx])
             max_rad_idx = np.argmax(terminal_radius)
             root_idx = terminal_idx[max_rad_idx]
+            #print(root_idx)
             max_rad = terminal_radius[max_rad_idx]
 
             # bfs_tree = nx.bfs_tree(cc_graph, root_idx)
@@ -381,6 +385,8 @@ def create_directed_graph(graph, root_type=None, roots=None):
                 visited.append(c_node)
     else:
         raise NotImplementedError
+
+    #print(directed_graph.edges())
     return directed_graph
 
 
@@ -393,7 +399,7 @@ def read_graph_from_file(filename):
         raise NotImplementedError
     # convert unordered graph to ordered graph here?
     # take endpoint with largest radius as root
-    # graph = create_directed_graph(graph, root_type="largest_radius")
+    graph = create_directed_graph(graph, root_type="largest_radius")
 
     return graph
 
