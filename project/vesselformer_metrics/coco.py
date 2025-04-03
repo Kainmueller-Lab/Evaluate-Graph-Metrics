@@ -59,7 +59,7 @@ class COCOMetric(ABC):
                  classes: Sequence[str],
                  iou_list: Sequence[float] = (0.5, 0.75),
                  iou_range: Sequence[float] = (0.5, 0.95, 0.05),
-                 max_detection: Sequence[int] = (40,),
+                 max_detection: Sequence[int] = (4500),
                  per_class: bool = True,
                  verbose: bool = True):
         """

@@ -315,9 +315,12 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
         split = line.split(" ")
         node_id = int(split[0])
         node_type = int(float(split[1]))
-        x = float(split[2])*scale_factor[0]
-        y = float(split[3])*scale_factor[1]
-        z = float(split[4])*scale_factor[2]
+        # x = float(split[2])*scale_factor[0]
+        # y = float(split[3])*scale_factor[1]
+        # z = float(split[4])*scale_factor[2]
+        x = round(float(split[2]))
+        y = round(float(split[3]))
+        z = round(float(split[4]))
         if offset is not None:
             x = x + offset[0]
             y = y + offset[1]
@@ -769,7 +772,7 @@ def compute_vesselformer_metrics(args, Gs, Hs, matcheds):
     compute_node_metrics = True
     compute_edge_metrics = True
 
-    max_det = 10000
+    max_det = 3000
     metrics = tuple([COCOMetric(classes=['Node'], per_class=False, verbose=False, max_detection=(max_det,))])
     iou_thresholds = get_unique_iou_thresholds(metrics)
     iou_mapping = get_indices_of_iou_for_each_metric(iou_thresholds, metrics)
@@ -823,8 +826,8 @@ def compute_vesselformer_metrics(args, Gs, Hs, matcheds):
 def compute_vesselformer_metrics_single(
         G, H, matched, box_evaluator, compute_node_metrics=True, compute_edge_metrics=True):
 
-    BOX_WIDTH = 0.2 * 64
-    EDGE_BOX_OFFSET = 0.1 * 64
+    BOX_WIDTH = 16
+    EDGE_BOX_OFFSET = 8
 
     G_nodes = list(G.nodes(data=True))
     P_nodes = list(H.nodes(data=True))

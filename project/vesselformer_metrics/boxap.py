@@ -36,7 +36,7 @@ class MeanBoxAP(Metric):
     """
     def __init__(self,
                  output_transform: Callable = lambda x: x,
-                 max_detections: int = 100):
+                 max_detections: int = 10000):
         """[summary]
 
         Args:
@@ -129,7 +129,7 @@ class BoxAP(ABC):
                 metrics: Sequence[ABC],
                 iou_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] = box_iou_np,
                 reduction="mean",
-                max_detections=100
+                max_detections=10000
                 ):
         """[summary]
 
