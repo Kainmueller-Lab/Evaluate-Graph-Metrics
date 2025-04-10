@@ -319,7 +319,7 @@ def check_parent_tree_label(graph, node, pred_matched_labels):
     return parent_label
 
 
-def match_hierarchical(source, target, visualize=False):
+def match_hierarchical_old(source, target, visualize=False):
     start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}
@@ -473,3 +473,358 @@ def match_hierarchical(source, target, visualize=False):
     logger.info("time for node matching: %f sec." % (time.time() - start_time))
 
     return match_dict
+
+
+def find_neighbor_tree_label(graph, node, pred_matched_labels, semantic_map, max_semantic_hops=5):
+    """
+    BFS over the target graph, but only count hops through branch or end points.
+    Returns the GT label of the first matched prediction node encountered.
+    """
+    visited = set()
+    queue = [(node, 0)]
+
+    while queue:
+        current, semantic_hops = queue.pop(0)
+
+        if semantic_hops > max_semantic_hops:
+            break
+
+        if current != node and current in pred_matched_labels:
+            return pred_matched_labels[current]
+
+        visited.add(current)
+
+        for neighbor in graph.neighbors(current):
+            if neighbor in visited:
+                continue
+
+
+            if semantic_map.get(neighbor) in {"branch", "end"}:
+                queue.append((neighbor, semantic_hops + 1))
+                visited.add(neighbor)
+            else:
+
+                queue.append((neighbor, semantic_hops))
+                visited.add(neighbor)
+
+    return None
+
+
+def match_hierarchical(source, target, visualize=False):
+    start_time = time.time()
+    match_dict = {}
+    pred_matched_labels = {}
+    pred_matched_nodes = set()
+    gt_matched_nodes = set()
+
+    # Find GT (source) roots – source is directed
+    gt_roots = [n for n, d in source.in_degree() if d == 0]
+
+    # Label connected components (trees)
+    source, gt_labels = label_connected_components(source)
+    target, pred_labels = label_connected_components(target)
+
+    # Get positions of nodes
+    source_positions = nx.get_node_attributes(source, 'coord')
+    target_positions = nx.get_node_attributes(target, 'coord')
+
+    if not source_positions or not target_positions:
+        raise ValueError("Both source and target graphs must have 'coord' attributes for nodes.")
+
+    # Build KD-Trees for spatial search
+    pred_kdtree = KDTree(np.array(list(target_positions.values())))
+    gt_kdtree = KDTree(np.array(list(source_positions.values())))
+
+    # Assign semantics to GT nodes
+    gt_semantics = {}
+    for node in source.nodes:
+        in_deg = source.in_degree(node)
+        out_deg = source.out_degree(node)
+        if in_deg == 0:
+            gt_semantics[node] = "root"
+        elif out_deg == 0:
+            gt_semantics[node] = "end"
+        elif in_deg == 1 and out_deg == 1:
+            gt_semantics[node] = "segment"
+        elif out_deg > 1:
+            gt_semantics[node] = "branch"
+        else:
+            gt_semantics[node] = "other"
+
+    target_semantics = {}
+    semantic_map = {}
+    for node in target.nodes:
+        deg = target.degree(node)
+        if deg == 1:
+            target_semantics[node] = "end"
+        elif deg == 2:
+            target_semantics[node] = "segment"
+        else:
+            target_semantics[node] = "branch"
+
+    all_target_nodes = list(target.nodes)
+
+    # Iterate over each GT root
+    for root in gt_roots:
+        clabel = gt_labels[root]
+
+        ### STEP 1: Match the root node
+        dists, candidates = pred_kdtree.query(
+            source_positions[root], p=2,
+            distance_upper_bound=10
+        )
+
+        if isinstance(candidates, (int, np.integer)):
+            candidates = [candidates]
+        if isinstance(dists, float):
+            dists = [dists]
+
+        candidates = [all_target_nodes[idx] for idx in candidates if idx < len(all_target_nodes)]
+        unmatched_candidates = [node for node in candidates if node not in pred_matched_nodes]
+
+        if unmatched_candidates:
+            endpoint_candidates = [n for n in unmatched_candidates if target_semantics[n] == "end"]
+
+            if endpoint_candidates:
+                root_coord = np.array(source_positions[root])
+                distances = {
+                    n: np.linalg.norm(np.array(target_positions[n]) - root_coord)
+                    for n in endpoint_candidates
+                }
+                best_match = min(distances, key=distances.get)
+                match_dict[root] = best_match
+                pred_matched_labels[best_match] = clabel
+                pred_matched_nodes.add(best_match)
+                gt_matched_nodes.add(root)
+            else:
+                print(f"No endpoint match found for GT root {root}")
+
+        ### STEP 2: Traverse tree and match branch points only
+        next_nodes = list(source.successors(root))
+
+        while next_nodes:
+            cnode = next_nodes.pop()
+            next_nodes += list(source.successors(cnode))
+
+            if gt_semantics.get(cnode) == "segment":
+                continue  # skip non-branch nodes for now
+
+            cnode_semantic = gt_semantics.get(cnode)
+            dists, candidates = pred_kdtree.query(
+                source_positions[cnode], p=2,
+                distance_upper_bound=10
+            )
+
+            if isinstance(candidates, (int, np.integer)):
+                candidates = [candidates]
+            if isinstance(dists, float):
+                dists = [dists]
+
+            candidates = [all_target_nodes[idx] for idx in candidates if idx < len(all_target_nodes)]
+            unmatched_candidates = [node for node in candidates if node not in pred_matched_nodes]
+
+            if unmatched_candidates:
+                #semantic_map = {}
+                neighbor_label_map = {}
+                for node in unmatched_candidates:
+                    neighbor_label = find_neighbor_tree_label(target, node, pred_matched_labels, target_semantics)
+
+                    neighbor_label_map[node] = neighbor_label
+
+                # You can customize this fallback (for now we pick any)
+                match_both = []
+                match_neighbor_only = []
+                match_semantic_only = []
+
+                for node in unmatched_candidates:
+                    semantic = target_semantics[node]
+                    neighbor_label = neighbor_label_map[node]
+
+                    if semantic == cnode_semantic and neighbor_label == clabel:
+                        match_both.append(node)
+                    elif semantic != cnode_semantic and neighbor_label == clabel:
+                        match_neighbor_only.append(node)
+                    elif semantic == cnode_semantic and neighbor_label is None:
+                        match_semantic_only.append(node)
+
+                # Try in order of preference
+                selected = None
+                if match_both:
+                    selected = min(
+                        match_both,
+                        key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[cnode]))
+                    )
+                elif match_neighbor_only:
+                    selected = min(
+                        match_neighbor_only,
+                        key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[cnode]))
+                    )
+                elif match_semantic_only:
+                    selected = min(
+                        match_semantic_only,
+                        key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[cnode]))
+                    )
+                if selected is not None:
+                    match_dict[cnode] = selected
+                    pred_matched_labels[selected] = clabel
+                    pred_matched_nodes.add(selected)
+                    gt_matched_nodes.add(cnode)
+                else:
+                    print(f"No valid match for GT branch node {cnode}")
+
+
+    ### STEP 3: Match unmatched target branch/end nodes to GT ###
+    for pnode in target.nodes:
+        if pnode in pred_matched_nodes:
+            continue  # already matched
+
+        # Step b: Try to find neighbor label from matched nodes
+        neighbor_label = find_neighbor_tree_label(target, pnode, pred_matched_labels, target_semantics)
+        if neighbor_label is None:
+            continue  # no structure to guide matching
+
+        # Step c: Query nearby GT nodes
+        dists, gt_candidates = gt_kdtree.query(
+            target_positions[pnode], p=2,
+            distance_upper_bound=10
+        )
+
+        if isinstance(gt_candidates, (int, np.integer)):
+            gt_candidates = [gt_candidates]
+        if isinstance(dists, float):
+            dists = [dists]
+
+        all_gt_nodes = list(source.nodes)
+        gt_candidates = [all_gt_nodes[idx] for idx in gt_candidates if idx < len(all_gt_nodes)]
+        unmatched_gt_candidates = [node for node in gt_candidates if node not in gt_matched_nodes]
+
+        if not unmatched_gt_candidates:
+            continue
+
+        # Step d: Build maps
+        match_both = []
+        match_neighbor_only = []
+        match_semantic_only = []
+
+        for gnode in unmatched_gt_candidates:
+            g_semantic = gt_semantics.get(gnode)
+            g_label = gt_labels[gnode]
+
+            if g_semantic == target_semantics[pnode] and g_label == neighbor_label:
+                match_both.append(gnode)
+            elif g_semantic != target_semantics[pnode] and g_label == neighbor_label:
+                match_neighbor_only.append(gnode)
+            elif g_semantic == target_semantics[pnode] and g_label is None:
+                match_semantic_only.append(gnode)
+
+        # Step e: Choose the best match
+        selected = None
+        if match_both:
+            selected = min(
+                match_both,
+                key=lambda n: np.linalg.norm(np.array(source_positions[n]) - np.array(target_positions[pnode]))
+            )
+        elif match_neighbor_only:
+            selected = min(
+                match_neighbor_only,
+                key=lambda n: np.linalg.norm(np.array(source_positions[n]) - np.array(target_positions[pnode]))
+            )
+        elif match_semantic_only:
+            selected = min(
+                match_semantic_only,
+                key=lambda n: np.linalg.norm(np.array(source_positions[n]) - np.array(target_positions[pnode]))
+            )
+
+        # Step f: Register the match
+        if selected is not None:
+            match_dict[selected] = pnode  # flipped direction
+            pred_matched_labels[pnode] = gt_labels[selected]
+            pred_matched_nodes.add(pnode)
+            gt_matched_nodes.add(selected)
+        else:
+            print(f"No valid GT match for predicted node {pnode}")
+
+
+    ### STEP 4: Match remaining unmatched GT nodes to unmatched prediction nodes ###
+    for gnode in source.nodes:
+        if gnode in gt_matched_nodes:
+            continue  # already matched
+
+        cnode_semantic = gt_semantics.get(gnode)
+        clabel = gt_labels[gnode]
+
+        # Query nearby unmatched prediction nodes
+        dists, pred_candidates = pred_kdtree.query(
+            source_positions[gnode], p=2,
+            distance_upper_bound=10
+        )
+
+        if isinstance(pred_candidates, (int, np.integer)):
+            pred_candidates = [pred_candidates]
+        if isinstance(dists, float):
+            dists = [dists]
+
+        pred_candidates = [all_target_nodes[idx] for idx in pred_candidates if idx < len(all_target_nodes)]
+        unmatched_pred_candidates = [node for node in pred_candidates if node not in pred_matched_nodes]
+
+        if not unmatched_pred_candidates:
+            continue
+
+        #semantic_map = {}
+        neighbor_label_map = {}
+        for node in unmatched_pred_candidates:
+            neighbor_label = find_neighbor_tree_label(target, node, pred_matched_labels, target_semantics)
+            neighbor_label_map[node] = neighbor_label
+
+        match_both = []
+        match_neighbor_only = []
+        match_semantic_only = []
+
+        for node in unmatched_pred_candidates:
+            semantic = target_semantics[node]
+            neighbor_label = neighbor_label_map[node]
+
+            if semantic == cnode_semantic and neighbor_label == clabel:
+                match_both.append(node)
+            elif semantic != cnode_semantic and neighbor_label == clabel:
+                match_neighbor_only.append(node)
+            elif semantic == cnode_semantic and neighbor_label is None:
+                match_semantic_only.append(node)
+
+        selected = None
+        if match_both:
+            selected = min(
+                match_both,
+                key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[gnode]))
+            )
+        elif match_neighbor_only:
+            selected = min(
+                match_neighbor_only,
+                key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[gnode]))
+            )
+        elif match_semantic_only:
+            selected = min(
+                match_semantic_only,
+                key=lambda n: np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[gnode]))
+            )
+
+        if selected is not None:
+            match_dict[gnode] = selected
+            pred_matched_labels[selected] = clabel
+            pred_matched_nodes.add(selected)
+            gt_matched_nodes.add(gnode)
+        else:
+            print(f"No match found in STEP 4 for GT node {gnode}")
+
+
+
+
+    if visualize:
+        visualize_matching(source, target, match_dict)
+
+    logger.info("Time for node matching: %.2f sec" % (time.time() - start_time))
+    return match_dict
+
+
+
+
