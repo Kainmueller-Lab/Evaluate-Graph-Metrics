@@ -817,10 +817,10 @@ def match_hierarchical(source, target, visualize=False):
             print(f"No match found in STEP 4 for GT node {gnode}")
 
 
-
+    match_dict_one_to_one = match_one_to_one(source, target)
 
     if visualize:
-        visualize_matching(source, target, match_dict)
+        visualize_matching(source, target, match_dict, match_dict_one_to_one)
 
     logger.info("Time for node matching: %.2f sec" % (time.time() - start_time))
     return match_dict
