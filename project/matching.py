@@ -607,7 +607,7 @@ def match_hierarchical(source, target, visualize=False):
             next_nodes += list(source.successors(cnode))
 
             if gt_semantics.get(cnode) == "segment":
-                continue  # skip non-branch nodes for now
+                continue
 
             cnode_semantic = gt_semantics.get(cnode)
             dists, candidates = pred_kdtree.query(
@@ -631,7 +631,7 @@ def match_hierarchical(source, target, visualize=False):
 
                     neighbor_label_map[node] = neighbor_label
 
-                # You can customize this fallback (for now we pick any)
+
                 match_both = []
                 match_neighbor_only = []
                 match_semantic_only = []
@@ -647,7 +647,7 @@ def match_hierarchical(source, target, visualize=False):
                     elif semantic == cnode_semantic and neighbor_label is None:
                         match_semantic_only.append(node)
 
-                # Try in order of preference
+
                 selected = None
                 if match_both:
                     selected = min(
@@ -681,7 +681,7 @@ def match_hierarchical(source, target, visualize=False):
         # Step b: Try to find neighbor label from matched nodes
         neighbor_label = find_neighbor_tree_label(target, pnode, pred_matched_labels, target_semantics)
         if neighbor_label is None:
-            continue  # no structure to guide matching
+            continue
 
         # Step c: Query nearby GT nodes
         dists, gt_candidates = gt_kdtree.query(
@@ -748,7 +748,7 @@ def match_hierarchical(source, target, visualize=False):
     ### STEP 4: Match remaining unmatched GT nodes to unmatched prediction nodes ###
     for gnode in source.nodes:
         if gnode in gt_matched_nodes:
-            continue  # already matched
+            continue
 
         cnode_semantic = gt_semantics.get(gnode)
         clabel = gt_labels[gnode]
