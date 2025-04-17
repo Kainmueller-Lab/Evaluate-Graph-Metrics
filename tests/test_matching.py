@@ -239,7 +239,6 @@ class TestHierarchicalMatching(unittest.TestCase):
         result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
         self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
-class TestHierarchicalMatching(unittest.TestCase):
     def test_hierarchical_basic(self):
 
         G = nx.DiGraph()
