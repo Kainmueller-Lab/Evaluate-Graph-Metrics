@@ -1,4 +1,6 @@
 import logging
+import sys
+
 import networkx as nx
 import numpy as np
 from scipy.spatial import KDTree
@@ -119,7 +121,7 @@ def match_nearest_within_radius(source, target):
     return match_dict
 
 
-def match_one_to_one(source, target, matching_dist="fixed",
+def match_one_to_one_old(source, target, matching_dist="fixed",
                      max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
@@ -187,6 +189,65 @@ def match_one_to_one(source, target, matching_dist="fixed",
         visualize_matching(source, target, match_dict)
 
     return match_dict
+
+def match_one_to_one(source, target, matching_dist="fixed",
+                     max_distance=10, visualize=False):
+    """
+    Matches source nodes to the nearest available target node within a given radius.
+    Ensures a one-to-one matching: each target is used at most once.
+    """
+    match_dict = {}
+    source_positions = nx.get_node_attributes(source, 'coord')
+    source_nodes = list(source_positions.keys())
+    source_coords = np.array([source_positions[node] for node in source_nodes])
+    source_radii = nx.get_node_attributes(source, 'radius')
+    source_radii = np.array([source_radii[k] for k in source_radii.keys()])
+
+    target_positions = nx.get_node_attributes(target, 'coord')
+    target_nodes = list(target_positions.keys())
+    target_coords = np.array([target_positions[node] for node in target_nodes])
+    target_kdtree = KDTree(target_coords)
+
+    used_targets = set()
+    used_sources = set()
+
+    dists = []
+    source_ids = []
+    target_ids = []
+
+    if matching_dist == "fixed":
+        # Get only 1 nearest neighbor within max_distance
+        kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=max_distance)
+    elif matching_dist == "radius":
+        kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=source_radii)
+    else:
+        raise NotImplementedError
+
+    # Collect valid (not inf) distances
+    for i, (dist, idx) in enumerate(zip(kd_dists, kd_indices)):
+        if not np.isinf(dist):
+            dists.append(dist)
+            source_ids.append(i)
+            target_ids.append(idx)
+
+    sort_idx = np.argsort(dists)
+    dists = np.array(dists)[sort_idx]
+    source_ids = np.array(source_ids)[sort_idx]
+    target_ids = np.array(target_ids)[sort_idx]
+
+    for dist, src_idx, tgt_idx in zip(dists, source_ids, target_ids):
+        src_node = source_nodes[src_idx]
+        tgt_node = target_nodes[tgt_idx]
+        if src_node not in used_sources and tgt_node not in used_targets:
+            match_dict[src_node] = tgt_node
+            used_sources.add(src_node)
+            used_targets.add(tgt_node)
+
+    if visualize:
+        visualize_matching(source, target, match_dict)
+
+    return match_dict
+
 
 
 def match_greedy(source, target):
@@ -475,6 +536,31 @@ def match_hierarchical_old(source, target, visualize=False):
     return match_dict
 
 
+
+def get_candidates_query(kdtree, position, all_nodes, matched_nodes, k=1, distance_upper_bound=10):
+    dists, candidates = kdtree.query(position, k=k, p=2, distance_upper_bound=distance_upper_bound)
+
+    if isinstance(candidates, (int, np.integer)):
+        candidates = [candidates]
+    if isinstance(dists, float):
+        dists = [dists]
+
+    candidates = [all_nodes[idx] for idx in candidates if idx < len(all_nodes)]
+    unmatched_candidates = [node for node in candidates if node not in matched_nodes]
+    return unmatched_candidates
+
+
+def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=10):
+    candidates = kdtree.query_ball_point(position, r=radius, p=2)
+
+    if isinstance(candidates, (int, np.integer)):
+        candidates = [candidates]
+
+    candidates = [all_nodes[idx] for idx in candidates if idx < len(all_nodes)]
+    unmatched_candidates = [node for node in candidates if node not in matched_nodes]
+    return unmatched_candidates
+
+
 def find_neighbor_tree_label(graph, node, pred_matched_labels, semantic_map, max_semantic_hops=5):
     """
     BFS over the target graph, but only count hops through branch or end points.
@@ -569,18 +655,9 @@ def match_hierarchical(source, target, visualize=False):
         clabel = gt_labels[root]
 
         ### STEP 1: Match the root node
-        dists, candidates = pred_kdtree.query(
-            source_positions[root], p=2,
-            distance_upper_bound=10
-        )
 
-        if isinstance(candidates, (int, np.integer)):
-            candidates = [candidates]
-        if isinstance(dists, float):
-            dists = [dists]
-
-        candidates = [all_target_nodes[idx] for idx in candidates if idx < len(all_target_nodes)]
-        unmatched_candidates = [node for node in candidates if node not in pred_matched_nodes]
+        unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[root], all_target_nodes,
+                                                    pred_matched_nodes)
 
         if unmatched_candidates:
             endpoint_candidates = [n for n in unmatched_candidates if target_semantics[n] == "end"]
@@ -597,6 +674,7 @@ def match_hierarchical(source, target, visualize=False):
                 pred_matched_nodes.add(best_match)
                 gt_matched_nodes.add(root)
             else:
+                #continue
                 print(f"No endpoint match found for GT root {root}")
 
         ### STEP 2: Traverse tree and match branch points only
@@ -610,18 +688,8 @@ def match_hierarchical(source, target, visualize=False):
                 continue
 
             cnode_semantic = gt_semantics.get(cnode)
-            dists, candidates = pred_kdtree.query(
-                source_positions[cnode], p=2,
-                distance_upper_bound=10
-            )
-
-            if isinstance(candidates, (int, np.integer)):
-                candidates = [candidates]
-            if isinstance(dists, float):
-                dists = [dists]
-
-            candidates = [all_target_nodes[idx] for idx in candidates if idx < len(all_target_nodes)]
-            unmatched_candidates = [node for node in candidates if node not in pred_matched_nodes]
+            unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[cnode], all_target_nodes,
+                                                        pred_matched_nodes)
 
             if unmatched_candidates:
                 #semantic_map = {}
@@ -670,6 +738,7 @@ def match_hierarchical(source, target, visualize=False):
                     pred_matched_nodes.add(selected)
                     gt_matched_nodes.add(cnode)
                 else:
+                    #continue
                     print(f"No valid match for GT branch node {cnode}")
 
 
@@ -684,19 +753,9 @@ def match_hierarchical(source, target, visualize=False):
             continue
 
         # Step c: Query nearby GT nodes
-        dists, gt_candidates = gt_kdtree.query(
-            target_positions[pnode], p=2,
-            distance_upper_bound=10
-        )
-
-        if isinstance(gt_candidates, (int, np.integer)):
-            gt_candidates = [gt_candidates]
-        if isinstance(dists, float):
-            dists = [dists]
-
         all_gt_nodes = list(source.nodes)
-        gt_candidates = [all_gt_nodes[idx] for idx in gt_candidates if idx < len(all_gt_nodes)]
-        unmatched_gt_candidates = [node for node in gt_candidates if node not in gt_matched_nodes]
+        unmatched_gt_candidates = get_candidates_query(gt_kdtree, target_positions[pnode], all_gt_nodes,
+                                                       gt_matched_nodes)
 
         if not unmatched_gt_candidates:
             continue
@@ -742,6 +801,7 @@ def match_hierarchical(source, target, visualize=False):
             pred_matched_nodes.add(pnode)
             gt_matched_nodes.add(selected)
         else:
+            #continue
             print(f"No valid GT match for predicted node {pnode}")
 
 
@@ -752,20 +812,8 @@ def match_hierarchical(source, target, visualize=False):
 
         cnode_semantic = gt_semantics.get(gnode)
         clabel = gt_labels[gnode]
-
-        # Query nearby unmatched prediction nodes
-        dists, pred_candidates = pred_kdtree.query(
-            source_positions[gnode], p=2,
-            distance_upper_bound=10
-        )
-
-        if isinstance(pred_candidates, (int, np.integer)):
-            pred_candidates = [pred_candidates]
-        if isinstance(dists, float):
-            dists = [dists]
-
-        pred_candidates = [all_target_nodes[idx] for idx in pred_candidates if idx < len(all_target_nodes)]
-        unmatched_pred_candidates = [node for node in pred_candidates if node not in pred_matched_nodes]
+        unmatched_pred_candidates = get_candidates_query(pred_kdtree, source_positions[gnode], all_target_nodes,
+                                                         pred_matched_nodes)
 
         if not unmatched_pred_candidates:
             continue
@@ -814,6 +862,7 @@ def match_hierarchical(source, target, visualize=False):
             pred_matched_nodes.add(selected)
             gt_matched_nodes.add(gnode)
         else:
+            #continue
             print(f"No match found in STEP 4 for GT node {gnode}")
 
 
@@ -824,6 +873,9 @@ def match_hierarchical(source, target, visualize=False):
 
     logger.info("Time for node matching: %.2f sec" % (time.time() - start_time))
     return match_dict
+
+
+
 
 
 
