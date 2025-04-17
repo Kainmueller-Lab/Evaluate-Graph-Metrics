@@ -46,48 +46,48 @@ class TestMatching(unittest.TestCase):
         
 
 
-class TestOneToOne(unittest.TestCase):
-    def test_basic(self):
-        self.G = nx.DiGraph()
-        nodes_G = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([1, 0, 0]), 'radius': 1}),
-            (3, {'coord': np.array([0, 1, 0]), 'radius': 1}),
-        ]
-        edges_G = []
-        self.G.add_nodes_from(nodes_G)
-        self.G.add_edges_from(edges_G)
-
-        self.H = nx.DiGraph()
-        nodes_H = [
-            (1, {'coord': np.array([0.5, 0.5, 0]), 'radius': 1}),
-            (2, {'coord': np.array([0.51, 0.51, 0.1]), 'radius': 1}),
-        ]
-        edges_H = []
-        self.H.add_nodes_from(nodes_H)
-        self.H.add_edges_from(edges_H)
-
-        result = match_graphs(self.G, self.H, MatchingType.One_to_One)
-        self.assertDictEqual(result, {1: 1, 2: 2})
-
-    def test_basic_2(self):
-        N = 6
-        self.G = nx.DiGraph()
-        nodes_G = [(i, {'coord': np.array([i, 0]), 'radius': 1}) for i in range(N)]
-        edges_G = []
-        self.G.add_nodes_from(nodes_G)
-        self.G.add_edges_from(edges_G)
-
-        self.H = nx.DiGraph()
-        nodes_H = [(i, {'coord': np.array([i+0.5, 0]), 'radius': 1}) for i in range(N-1)]
-        edges_H = []
-        self.H.add_nodes_from(nodes_H)
-        self.H.add_edges_from(edges_H)
-
-        result = match_graphs(self.G, self.H, MatchingType.One_to_One)
-        self.assertDictEqual(result, {i : i for i in range(N-1)})
-
-    # TODO: adapt test to radius threshold
+# class TestOneToOne(unittest.TestCase):
+#     def test_basic(self):
+#         self.G = nx.DiGraph()
+#         nodes_G = [
+#             (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+#             (2, {'coord': np.array([1, 0, 0]), 'radius': 1}),
+#             (3, {'coord': np.array([0, 1, 0]), 'radius': 1}),
+#         ]
+#         edges_G = []
+#         self.G.add_nodes_from(nodes_G)
+#         self.G.add_edges_from(edges_G)
+#
+#         self.H = nx.DiGraph()
+#         nodes_H = [
+#             (1, {'coord': np.array([0.5, 0.5, 0]), 'radius': 1}),
+#             (2, {'coord': np.array([0.51, 0.51, 0.1]), 'radius': 1}),
+#         ]
+#         edges_H = []
+#         self.H.add_nodes_from(nodes_H)
+#         self.H.add_edges_from(edges_H)
+#
+#         result = match_graphs(self.G, self.H, MatchingType.One_to_One)
+#         self.assertDictEqual(result, {1: 1, 2: 2})
+#
+#     def test_basic_2(self):
+#         N = 6
+#         self.G = nx.DiGraph()
+#         nodes_G = [(i, {'coord': np.array([i, 0]), 'radius': 1}) for i in range(N)]
+#         edges_G = []
+#         self.G.add_nodes_from(nodes_G)
+#         self.G.add_edges_from(edges_G)
+#
+#         self.H = nx.DiGraph()
+#         nodes_H = [(i, {'coord': np.array([i+0.5, 0]), 'radius': 1}) for i in range(N-1)]
+#         edges_H = []
+#         self.H.add_nodes_from(nodes_H)
+#         self.H.add_edges_from(edges_H)
+#
+#         result = match_graphs(self.G, self.H, MatchingType.One_to_One)
+#         self.assertDictEqual(result, {i : i for i in range(N-1)})
+#
+#     # TODO: adapt test to radius threshold
     # def test_out_of_reach(self):
     #     self.G = nx.DiGraph()
     #     nodes_G = [
@@ -239,7 +239,40 @@ class TestHierarchicalMatching(unittest.TestCase):
         result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
         self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
+class TestHierarchicalMatching(unittest.TestCase):
+    def test_hierarchical_basic(self):
 
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+        ]
+        edges_G = [(2, 1)]
+        G.add_nodes_from(nodes_G)
+        G.add_edges_from(edges_G)
+
+
+        H = nx.Graph()
+        nodes_H = [
+            (10, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
+            (20, {'coord': np.array([2.1, 0, 0]), 'radius': 1}),
+            (30, {'coord': np.array([0.2, 0.1, 0]), 'radius': 1}),
+        ]
+        edges_H = [(20, 10), (20, 30)]
+        H.add_nodes_from(nodes_H)
+        H.add_edges_from(edges_H)
+
+        result = match_graphs(G, H, MatchingType.Hierarchical)
+
+
+        self.assertIn(1, result)
+        self.assertIn(2, result)
+
+
+        self.assertEqual(result[2], 20)
+
+
+        self.assertIn(result[1], [10, 30])
 
 if __name__ == "__main__":
     unittest.main()

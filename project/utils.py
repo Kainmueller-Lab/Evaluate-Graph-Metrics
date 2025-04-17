@@ -420,7 +420,91 @@ def label_connected_components(graph):
     return graph, node_labels
 
 
-def visualize_matching(gt_graph, pred_graph, matched_dict, title="Node Matching"):
+def visualize_matching(gt_graph, pred_graph, matched_dict, match_dict_one_to_one=None, title="Matching Differences Only"):
+    fig = go.Figure()
+
+
+    edge_x_gt, edge_y_gt, edge_z_gt = [], [], []
+    for node1, node2 in gt_graph.edges:
+        pos1 = gt_graph.nodes[node1]['coord']
+        pos2 = gt_graph.nodes[node2]['coord']
+        edge_x_gt.extend([pos1[0], pos2[0], None])
+        edge_y_gt.extend([pos1[1], pos2[1], None])
+        edge_z_gt.extend([pos1[2], pos2[2], None])
+
+    fig.add_trace(go.Scatter3d(
+        x=edge_x_gt, y=edge_y_gt, z=edge_z_gt,
+        mode='lines',
+        line=dict(color='blue', width=2),
+        hoverinfo='none',
+        name='GT Edges'
+    ))
+
+
+    edge_x_pred, edge_y_pred, edge_z_pred = [], [], []
+    for node1, node2 in pred_graph.edges:
+        pos1 = pred_graph.nodes[node1]['coord']
+        pos2 = pred_graph.nodes[node2]['coord']
+        edge_x_pred.extend([pos1[0], pos2[0], None])
+        edge_y_pred.extend([pos1[1], pos2[1], None])
+        edge_z_pred.extend([pos1[2], pos2[2], None])
+
+    fig.add_trace(go.Scatter3d(
+        x=edge_x_pred, y=edge_y_pred, z=edge_z_pred,
+        mode='lines',
+        line=dict(color='black', width=2),
+        hoverinfo='none',
+        name='Pred Edges'
+    ))
+
+
+    if match_dict_one_to_one is not None:
+        # Extra FPs: in matched_dict but not in match_dict_one_to_one
+        edge_x_fp_extra, edge_y_fp_extra, edge_z_fp_extra = [], [], []
+        unmatched_preds = set(matched_dict.values()) - set(match_dict_one_to_one.values())
+
+        for gt_node, pred_node in matched_dict.items():
+            if pred_node in unmatched_preds:
+                pos_gt = gt_graph.nodes[gt_node]['coord']
+                pos_pred = pred_graph.nodes[pred_node]['coord']
+                edge_x_fp_extra.extend([pos_gt[0], pos_pred[0], None])
+                edge_y_fp_extra.extend([pos_gt[1], pos_pred[1], None])
+                edge_z_fp_extra.extend([pos_gt[2], pos_pred[2], None])
+
+        fig.add_trace(go.Scatter3d(
+            x=edge_x_fp_extra, y=edge_y_fp_extra, z=edge_z_fp_extra,
+            mode='lines',
+            line=dict(color='green', width=3),
+            hoverinfo='none',
+            name='Extra FPs (not in one-to-one)'
+        ))
+
+        # Extra FNs: in matched_dict but not in match_dict_one_to_one
+        edge_x_fn_extra, edge_y_fn_extra, edge_z_fn_extra = [], [], []
+        unmatched_gts = set(matched_dict.keys()) - set(match_dict_one_to_one.keys())
+
+        for gt_node, pred_node in matched_dict.items():
+            if gt_node in unmatched_gts:
+                pos_gt = gt_graph.nodes[gt_node]['coord']
+                pos_pred = pred_graph.nodes[pred_node]['coord']
+                edge_x_fn_extra.extend([pos_gt[0], pos_pred[0], None])
+                edge_y_fn_extra.extend([pos_gt[1], pos_pred[1], None])
+                edge_z_fn_extra.extend([pos_gt[2], pos_pred[2], None])
+
+        fig.add_trace(go.Scatter3d(
+            x=edge_x_fn_extra, y=edge_y_fn_extra, z=edge_z_fn_extra,
+            mode='lines',
+            line=dict(color='orange', width=3),
+            hoverinfo='none',
+            name='Extra FNs (not in one-to-one)'
+        ))
+
+    fig.update_layout(title=title)
+    fig.show()
+
+
+
+def visualize_matching_old(gt_graph, pred_graph, matched_dict, title="Node Matching"):
     gt_pos = np.array(list(nx.get_node_attributes(gt_graph, 'coord').values()))
     pred_pos = np.array(list(nx.get_node_attributes(
         pred_graph, 'coord').values()))
