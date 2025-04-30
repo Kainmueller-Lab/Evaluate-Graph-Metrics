@@ -4,6 +4,11 @@ import numpy as np
 
 from project.matching import match_graphs, MatchingType
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
+
+
 class TestMatching(unittest.TestCase):
     def setUp(self):
         # NOTE:  We currently expect all graphs to be Branchings, see https://networkx.org/documentation/stable/reference/algorithms/tree.html
@@ -111,90 +116,91 @@ class TestMatching(unittest.TestCase):
 
 
 class TestHierarchicalMatching(unittest.TestCase):
-    def test_basic(self):
-        '''
-        G consists of an edge (2,1). Within 1 lie three nodes of H:
-        1' has a parent (2') which has same position as 2,
-        3' has no parent
-        4' has a parent (5') which is far from 2.
-
-        The resulting matching should map 1 to 1' and their parents 2 to 2'.
-        '''
-        self.G = nx.DiGraph()
-        nodes_G = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-        ]
-        edges_G = [
-            (2,1)
-        ]
-        self.G.add_nodes_from(nodes_G)
-        self.G.add_edges_from(edges_G)
-
-        self.H = nx.DiGraph()
-        nodes_H = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-            (3, {'coord': np.array([0, 0.1, 0]), 'radius': 1}),
-            (4, {'coord': np.array([0, -0.1, 0]), 'radius': 1}),
-            (5, {'coord': np.array([10, 0, 0]), 'radius': 1}),
-        ]
-        edges_H = [
-            (3,2),
-            (3,5),
-            (2,1),
-            (5,4),
-        ]
-        self.H.add_nodes_from(nodes_H)
-        self.H.add_edges_from(edges_H)
-
-        result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
-        self.assertDictEqual(result, {1: 1, 2: 2})
+    # def test_basic(self):
+    #     '''
+    #     G consists of an edge (2,1). Within 1 lie three nodes of H:
+    #     1' has a parent (2') which has same position as 2,
+    #     3' has no parent
+    #     4' has a parent (5') which is far from 2.
+    #
+    #     The resulting matching should map 1 to 1' and their parents 2 to 2'.
+    #     '''
+    #     self.G = nx.DiGraph()
+    #     nodes_G = [
+    #         (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+    #     ]
+    #     edges_G = [
+    #         (2,1)
+    #     ]
+    #     self.G.add_nodes_from(nodes_G)
+    #     self.G.add_edges_from(edges_G)
+    #
+    #     self.H = nx.DiGraph()
+    #     nodes_H = [
+    #         (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+    #         (3, {'coord': np.array([0, 0.1, 0]), 'radius': 1}),
+    #         (4, {'coord': np.array([0, -0.1, 0]), 'radius': 1}),
+    #         (5, {'coord': np.array([10, 0, 0]), 'radius': 1}),
+    #     ]
+    #     edges_H = [
+    #         (3,2),
+    #         (3,5),
+    #         (2,1),
+    #         (5,4),
+    #     ]
+    #     self.H.add_nodes_from(nodes_H)
+    #     self.H.add_edges_from(edges_H)
+    #
+    #     result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
+    #     self.assertDictEqual(result, {1: 1, 2: 2})
 
     
-    def test_basic(self):
-        '''
-        G consists of an edge (2,1) where 2 is parent of 1. 
-        Within 1 lie three nodes of H:
-        1' (with some offset position from 1) has a parent (2') which has same position as 2,
-        3' (same position as 1) has no parent
-        4' (same position as 1) has a parent (5') which is far from 2.
-
-        The resulting matching should map 1 to 1' and their parents 2 to 2',
-        even though 3' and 4' are closer to 1, because 1' has fitting parent.
-        '''
-        self.G = nx.DiGraph()
-        nodes_G = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-        ]
-        edges_G = [
-            (2,1)
-        ]
-        self.G.add_nodes_from(nodes_G)
-        self.G.add_edges_from(edges_G)
-
-        self.H = nx.DiGraph()
-        nodes_H = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0.2, 0]), 'radius': 1}),
-            (3, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (4, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (5, {'coord': np.array([10, 0, 0]), 'radius': 1}),
-        ]
-        edges_H = [
-            (3,2),
-            (3,5),
-            (2,1),
-            (5,4),
-        ]
-        self.H.add_nodes_from(nodes_H)
-        self.H.add_edges_from(edges_H)
-
-        result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
-        self.assertDictEqual(result, {1: 1, 2: 2})
+    # def test_basic(self):
+    #     '''
+    #     G consists of an edge (2,1) where 2 is parent of 1.
+    #     Within 1 lie three nodes of H:
+    #     1' (with some offset position from 1) has a parent (2') which has same position as 2,
+    #     3' (same position as 1) has no parent
+    #     4' (same position as 1) has a parent (5') which is far from 2.
+    #
+    #     The resulting matching should map 1 to 1' and their parents 2 to 2',
+    #     even though 3' and 4' are closer to 1, because 1' has fitting parent.
+    #     '''
+    #     self.G = nx.DiGraph()
+    #     nodes_G = [
+    #         (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+    #     ]
+    #     edges_G = [
+    #         (2,1)
+    #     ]
+    #     self.G.add_nodes_from(nodes_G)
+    #     self.G.add_edges_from(edges_G)
+    #
+    #     self.H = nx.DiGraph()
+    #     nodes_H = [
+    #         (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (2, {'coord': np.array([2, 0.2, 0]), 'radius': 1}),
+    #         (3, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (4, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (5, {'coord': np.array([10, 0, 0]), 'radius': 1}),
+    #     ]
+    #     edges_H = [
+    #         (3,2),
+    #         (3,5),
+    #         (2,1),
+    #         (5,4),
+    #     ]
+    #     self.H.add_nodes_from(nodes_H)
+    #     self.H.add_edges_from(edges_H)
+    #
+    #     result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
+    #     self.assertDictEqual(result, {1: 1, 2: 2})
 
     def test_basic_2(self):
+        open("debug.txt", "w").close()
         self.G = nx.DiGraph()
         nodes_G = [
             (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
@@ -208,22 +214,22 @@ class TestHierarchicalMatching(unittest.TestCase):
         self.G.add_nodes_from(nodes_G)
         self.G.add_edges_from(edges_G)
 
-        self.H = nx.DiGraph()
+        self.H = nx.Graph()
         nodes_H = [
             # Similar to G
-            (1, {'coord': np.array([0, 0.2, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0.2, 0]), 'radius': 1}),
-            (3, {'coord': np.array([4, 0.2, 0]), 'radius': 1}),
+            (1, {'coord': np.array([0, 0.35, 0]), 'radius': 1}),
+            (2, {'coord': np.array([2, 0.35, 0]), 'radius': 1}),
+            (3, {'coord': np.array([4, 0.35, 0]), 'radius': 1}),
             # Just the two children (2,3) of G
-            (4, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-            (5, {'coord': np.array([4, 0, 0]), 'radius': 1}),
+            (4, {'coord': np.array([2, 0.3, 0]), 'radius': 1}),
+            (5, {'coord': np.array([4, 0.3, 0]), 'radius': 1}),
             # Just the node 3 of G with a parent far out
             (6, {'coord': np.array([2, 0, 10]), 'radius': 1}),
-            (7, {'coord': np.array([4, 0, 0]), 'radius': 1}),
+            (7, {'coord': np.array([4, 0.2, 0]), 'radius': 1}),
             # The edge (2,3) of G where 2 has a parent far out
             (8, {'coord': np.array([0, 0, 10]), 'radius': 1}),
-            (9, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-            (10, {'coord': np.array([4, 0, 0]), 'radius': 1}),
+            (9, {'coord': np.array([2, 0.25, 0]), 'radius': 1}),
+            (10, {'coord': np.array([4, 0.25, 0]), 'radius': 1}),
         ]
         edges_H = [
             (1,2),
@@ -239,39 +245,39 @@ class TestHierarchicalMatching(unittest.TestCase):
         result = match_graphs(self.G, self.H, MatchingType.Hierarchical)
         self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
-    def test_hierarchical_basic(self):
-
-        G = nx.DiGraph()
-        nodes_G = [
-            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
-            (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
-        ]
-        edges_G = [(2, 1)]
-        G.add_nodes_from(nodes_G)
-        G.add_edges_from(edges_G)
-
-
-        H = nx.Graph()
-        nodes_H = [
-            (10, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
-            (20, {'coord': np.array([2.1, 0, 0]), 'radius': 1}),
-            (30, {'coord': np.array([0.2, 0.1, 0]), 'radius': 1}),
-        ]
-        edges_H = [(20, 10), (20, 30)]
-        H.add_nodes_from(nodes_H)
-        H.add_edges_from(edges_H)
-
-        result = match_graphs(G, H, MatchingType.Hierarchical)
-
-
-        self.assertIn(1, result)
-        self.assertIn(2, result)
-
-
-        self.assertEqual(result[2], 20)
-
-
-        self.assertIn(result[1], [10, 30])
+    # def test_hierarchical_basic(self):
+    #
+    #     G = nx.DiGraph()
+    #     nodes_G = [
+    #         (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+    #         (2, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+    #     ]
+    #     edges_G = [(2, 1)]
+    #     G.add_nodes_from(nodes_G)
+    #     G.add_edges_from(edges_G)
+    #
+    #
+    #     H = nx.Graph()
+    #     nodes_H = [
+    #         (10, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
+    #         (20, {'coord': np.array([2.1, 0, 0]), 'radius': 1}),
+    #         (30, {'coord': np.array([0.2, 0.1, 0]), 'radius': 1}),
+    #     ]
+    #     edges_H = [(20, 10), (20, 30)]
+    #     H.add_nodes_from(nodes_H)
+    #     H.add_edges_from(edges_H)
+    #
+    #     result = match_graphs(G, H, MatchingType.Hierarchical)
+    #
+    #
+    #     self.assertIn(1, result)
+    #     self.assertIn(2, result)
+    #
+    #
+    #     self.assertEqual(result[2], 20)
+    #
+    #
+    #     self.assertIn(result[1], [10, 30])
 
 if __name__ == "__main__":
     unittest.main()

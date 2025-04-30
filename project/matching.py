@@ -121,7 +121,7 @@ def match_nearest_within_radius(source, target):
     return match_dict
 
 
-def match_one_to_one_old(source, target, matching_dist="fixed",
+def match_one_to_one(source, target, matching_dist="fixed",
                      max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
@@ -190,7 +190,7 @@ def match_one_to_one_old(source, target, matching_dist="fixed",
 
     return match_dict
 
-def match_one_to_one(source, target, matching_dist="fixed",
+def match_one_to_one_query(source, target, matching_dist="fixed",
                      max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
@@ -545,7 +545,11 @@ def get_candidates_query(kdtree, position, all_nodes, matched_nodes, k=1, distan
     if isinstance(dists, float):
         dists = [dists]
 
-    candidates = [all_nodes[idx] for idx in candidates if idx < len(all_nodes)]
+    candidates = [
+        all_nodes[idx]
+        for dist, idx in zip(dists, candidates)
+        if not np.isinf(dist) and idx < len(all_nodes)
+    ]
     unmatched_candidates = [node for node in candidates if node not in matched_nodes]
     return unmatched_candidates
 
@@ -556,15 +560,18 @@ def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=10):
     if isinstance(candidates, (int, np.integer)):
         candidates = [candidates]
 
-    candidates = [all_nodes[idx] for idx in candidates if idx < len(all_nodes)]
+    candidates = [all_nodes[idx] for idx in candidates]
     unmatched_candidates = [node for node in candidates if node not in matched_nodes]
+    # open("debug.txt", "a").write(
+    #     f"Query at {position} → raw: {candidates}, unmatched: {unmatched_candidates}\n"
+    # )
     return unmatched_candidates
 
 
 def find_neighbor_tree_label(graph, node, pred_matched_labels, semantic_map, max_semantic_hops=5):
     """
-    BFS over the target graph, but only count hops through branch or end points.
-    Returns the GT label of the first matched prediction node encountered.
+    BFS over the graph, counting semantic hops only through 'branch' or 'end' nodes.
+    Returns the first encountered matched label within max_semantic_hops.
     """
     visited = set()
     queue = [(node, 0)]
@@ -575,28 +582,31 @@ def find_neighbor_tree_label(graph, node, pred_matched_labels, semantic_map, max
         if semantic_hops > max_semantic_hops:
             break
 
-        if current != node and current in pred_matched_labels:
-            return pred_matched_labels[current]
-
+        if current in visited:
+            continue
         visited.add(current)
 
+        if current != node and current in pred_matched_labels:
+            # open("debug.txt", "a").write(
+            #     f"Returning label '{pred_matched_labels[current]}' from neighbor {current} (start node: {node})\n")
+
+            return pred_matched_labels[current]
+
         for neighbor in graph.neighbors(current):
+            #open("debug.txt", "a").write(f"Current node: {current}, Neighbors: {list(graph.neighbors(current))}\n")
             if neighbor in visited:
                 continue
 
-
             if semantic_map.get(neighbor) in {"branch", "end"}:
                 queue.append((neighbor, semantic_hops + 1))
-                visited.add(neighbor)
             else:
-
                 queue.append((neighbor, semantic_hops))
-                visited.add(neighbor)
 
     return None
 
 
-def match_hierarchical(source, target, visualize=False):
+
+def match_hierarchical(source, target, visualize=True):
     start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}
@@ -608,7 +618,9 @@ def match_hierarchical(source, target, visualize=False):
 
     # Label connected components (trees)
     source, gt_labels = label_connected_components(source)
-    target, pred_labels = label_connected_components(target)
+    #target, pred_labels = label_connected_components(target)
+
+    all_target_nodes = list(target.nodes)
 
     # Get positions of nodes
     source_positions = nx.get_node_attributes(source, 'coord')
@@ -620,6 +632,26 @@ def match_hierarchical(source, target, visualize=False):
     # Build KD-Trees for spatial search
     pred_kdtree = KDTree(np.array(list(target_positions.values())))
     gt_kdtree = KDTree(np.array(list(source_positions.values())))
+
+    # make it deterministic by startig at root with min distance to its nearest candidate
+    gt_root_distances = []
+    for root in gt_roots:
+        unmatched_candidates = get_candidates_query(
+            pred_kdtree, source_positions[root], all_target_nodes, set()
+        )
+        if unmatched_candidates:
+            distances = [
+                np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[root]))
+                for n in unmatched_candidates
+            ]
+            min_distance = min(distances)
+        else:
+            min_distance = float("inf")
+
+        gt_root_distances.append((root, min_distance))
+
+    # Sort by ascending distance
+    gt_roots = [r for r, _ in sorted(gt_root_distances, key=lambda x: x[1])]
 
     # Assign semantics to GT nodes
     gt_semantics = {}
@@ -648,7 +680,7 @@ def match_hierarchical(source, target, visualize=False):
         else:
             target_semantics[node] = "branch"
 
-    all_target_nodes = list(target.nodes)
+
 
     # Iterate over each GT root
     for root in gt_roots:
@@ -746,6 +778,9 @@ def match_hierarchical(source, target, visualize=False):
     for pnode in target.nodes:
         if pnode in pred_matched_nodes:
             continue  # already matched
+
+        if target_semantics.get(pnode) == "segment":
+            continue
 
         # Step b: Try to find neighbor label from matched nodes
         neighbor_label = find_neighbor_tree_label(target, pnode, pred_matched_labels, target_semantics)
