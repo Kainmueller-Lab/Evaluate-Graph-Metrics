@@ -290,7 +290,7 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
             The undirected input graph.
         """
     # create graph
-    graph = nx.Graph()
+    graph = nx.DiGraph()
     # open swc file
     f = open(fn, "r")
     if scale_factor is None:
@@ -399,7 +399,7 @@ def read_graph_from_file(filename):
         raise NotImplementedError
     # convert unordered graph to ordered graph here?
     # take endpoint with largest radius as root
-    graph = create_directed_graph(graph, root_type="largest_radius")
+    #graph = create_directed_graph(graph, root_type="largest_radius")
 
     return graph
 

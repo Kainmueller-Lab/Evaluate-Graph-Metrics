@@ -185,8 +185,8 @@ def match_one_to_one(source, target, matching_dist="fixed",
             used_targets.append(c_target_nx)
             used_sources.append(c_source_nx)
 
-    if visualize:
-        visualize_matching(source, target, match_dict)
+    # if visualize:
+    #     visualize_matching(source, target, match_dict)
 
     return match_dict
 
@@ -243,8 +243,8 @@ def match_one_to_one_query(source, target, matching_dist="fixed",
             used_sources.add(src_node)
             used_targets.add(tgt_node)
 
-    if visualize:
-        visualize_matching(source, target, match_dict)
+    # if visualize:
+    #     visualize_matching(source, target, match_dict)
 
     return match_dict
 
@@ -562,6 +562,11 @@ def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=10):
 
     candidates = [all_nodes[idx] for idx in candidates]
     unmatched_candidates = [node for node in candidates if node not in matched_nodes]
+    target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
+    if np.allclose(position, target_debug_pos, atol=1e-4):
+        print(f"\n[DEBUG] Query at {position} (approx match to target)")
+        print(f"  Raw candidates: {candidates}")
+        print(f"  Unmatched candidates: {unmatched_candidates}")
     # open("debug.txt", "a").write(
     #     f"Query at {position} → raw: {candidates}, unmatched: {unmatched_candidates}\n"
     # )
@@ -613,8 +618,11 @@ def match_hierarchical(source, target, visualize=True):
     pred_matched_nodes = set()
     gt_matched_nodes = set()
 
+    target = target.to_undirected()
+
     # Find GT (source) roots – source is directed
     gt_roots = [n for n, d in source.in_degree() if d == 0]
+    print(f"gt_roots{gt_roots}")
 
     # Label connected components (trees)
     source, gt_labels = label_connected_components(source)
@@ -652,6 +660,7 @@ def match_hierarchical(source, target, visualize=True):
 
     # Sort by ascending distance
     gt_roots = [r for r, _ in sorted(gt_root_distances, key=lambda x: x[1])]
+    print(f"gt_roots{gt_roots}")
 
     # Assign semantics to GT nodes
     gt_semantics = {}
@@ -685,11 +694,16 @@ def match_hierarchical(source, target, visualize=True):
     # Iterate over each GT root
     for root in gt_roots:
         clabel = gt_labels[root]
+        print(f'root position{source_positions[root]}')
 
         ### STEP 1: Match the root node
 
         unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[root], all_target_nodes,
                                                     pred_matched_nodes)
+
+        target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
+        if np.allclose(source_positions[root], target_debug_pos, atol=1e-4):
+            print(f"[DEBUG] Step 1 — Matching GT root node {root} at {source_positions[root]}")
 
         if unmatched_candidates:
             endpoint_candidates = [n for n in unmatched_candidates if target_semantics[n] == "end"]
@@ -705,9 +719,9 @@ def match_hierarchical(source, target, visualize=True):
                 pred_matched_labels[best_match] = clabel
                 pred_matched_nodes.add(best_match)
                 gt_matched_nodes.add(root)
-            else:
-                #continue
-                print(f"No endpoint match found for GT root {root}")
+            # else:
+            #     #continue
+            #     print(f"No endpoint match found for GT root {root}")
 
         ### STEP 2: Traverse tree and match branch points only
         next_nodes = list(source.successors(root))
@@ -720,6 +734,7 @@ def match_hierarchical(source, target, visualize=True):
                 continue
 
             cnode_semantic = gt_semantics.get(cnode)
+            clabel = gt_labels[cnode]
             unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[cnode], all_target_nodes,
                                                         pred_matched_nodes)
 
@@ -747,6 +762,13 @@ def match_hierarchical(source, target, visualize=True):
                     elif semantic == cnode_semantic and neighbor_label is None:
                         match_semantic_only.append(node)
 
+                target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
+                if np.allclose(source_positions[cnode], target_debug_pos, atol=1e-4):
+                    print(f"[DEBUG] Step 2 — Matching GT branch node {cnode} at {source_positions[cnode]}")
+                    print(f"  match_both: {match_both}")
+                    print(f"  match_neighbor_only: {match_neighbor_only}")
+                    print(f"  match_semantic_only: {match_semantic_only}")
+
 
                 selected = None
                 if match_both:
@@ -769,9 +791,9 @@ def match_hierarchical(source, target, visualize=True):
                     pred_matched_labels[selected] = clabel
                     pred_matched_nodes.add(selected)
                     gt_matched_nodes.add(cnode)
-                else:
-                    #continue
-                    print(f"No valid match for GT branch node {cnode}")
+                # else:
+                #     #continue
+                #     print(f"No valid match for GT branch node {cnode}")
 
 
     ### STEP 3: Match unmatched target branch/end nodes to GT ###
@@ -811,6 +833,12 @@ def match_hierarchical(source, target, visualize=True):
             elif g_semantic == target_semantics[pnode] and g_label is None:
                 match_semantic_only.append(gnode)
 
+        target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
+        if np.allclose(target_positions[pnode], target_debug_pos, atol=1e-4):
+            print(f"  match_both: {match_both}")
+            print(f"  match_neighbor_only: {match_neighbor_only}")
+            print(f"  match_semantic_only: {match_semantic_only}")
+
         # Step e: Choose the best match
         selected = None
         if match_both:
@@ -835,9 +863,9 @@ def match_hierarchical(source, target, visualize=True):
             pred_matched_labels[pnode] = gt_labels[selected]
             pred_matched_nodes.add(pnode)
             gt_matched_nodes.add(selected)
-        else:
-            #continue
-            print(f"No valid GT match for predicted node {pnode}")
+        # else:
+        #     #continue
+        #     print(f"No valid GT match for predicted node {pnode}")
 
 
     ### STEP 4: Match remaining unmatched GT nodes to unmatched prediction nodes ###
@@ -874,6 +902,12 @@ def match_hierarchical(source, target, visualize=True):
             elif semantic == cnode_semantic and neighbor_label is None:
                 match_semantic_only.append(node)
 
+        target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
+        if np.allclose(source_positions[gnode], target_debug_pos, atol=1e-4):
+            print(f"  match_both: {match_both}")
+            print(f"  match_neighbor_only: {match_neighbor_only}")
+            print(f"  match_semantic_only: {match_semantic_only}")
+
         selected = None
         if match_both:
             selected = min(
@@ -896,9 +930,9 @@ def match_hierarchical(source, target, visualize=True):
             pred_matched_labels[selected] = clabel
             pred_matched_nodes.add(selected)
             gt_matched_nodes.add(gnode)
-        else:
-            #continue
-            print(f"No match found in STEP 4 for GT node {gnode}")
+        # else:
+        #     #continue
+        #     print(f"No match found in STEP 4 for GT node {gnode}")
 
 
     match_dict_one_to_one = match_one_to_one(source, target)
