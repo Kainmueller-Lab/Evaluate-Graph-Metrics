@@ -175,8 +175,8 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     H_copy.remove_edges_from(total_false_merges)
     false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
 
-    if visualize == True:
-        visualization(G, H, total_false_merges, false_splits, matched)
+    # if visualize == True:
+    #     visualization(G, H, total_false_merges, false_splits, matched)
 
     # print("false_merges:", len(false_merges))
 
@@ -252,8 +252,8 @@ def compute_edge_metrics_old(G, H, matched, visualize=True):
     H_copy.remove_edges_from(total_false_merges)
     false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
 
-    if visualize == True:
-        visualization(G, H, total_false_merges, false_splits, matched)
+    # if visualize == True:
+    #     visualization(G, H, total_false_merges, false_splits, matched)
 
     # print("false_merges:", len(false_merges))
 
