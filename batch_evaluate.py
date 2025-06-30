@@ -5,7 +5,7 @@ from collections import defaultdict
 
 
 GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/ground_truth_graph/"
-PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/teasar_swc/"
+PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/experiments/random_crops/teasar_swc/"
 MAIN_SCRIPT = "main.py"
 
 MATCHING = "hierarchical"
