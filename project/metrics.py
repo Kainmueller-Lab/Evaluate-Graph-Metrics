@@ -106,7 +106,7 @@ class GraphMetrics:
 
         # NOTE: Correct SMD implementation
         smd_POT = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=True)
-        (y_pc, output_pc), cost_POT = smd_POT.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
+        (y_pc, output_pc), cost_POT = smd_POT.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=3000)
 
         # print(f"Number of points in Graph G: {len(y_pc)}")
         # print(f"Number of points in Graph H: {len(output_pc)}")
@@ -119,7 +119,7 @@ class GraphMetrics:
 
         # NOTE: Faulty SMD implementation used in Vesselformer and Trexplorer.
         smd_VF = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=None, use_correct_sinkhorn_dist=False)
-        (y_pc, output_pc), cost_VF = smd_VF.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=2000)
+        (y_pc, output_pc), cost_VF = smd_VF.forward(G_adjacency, G_nodes, H_adjacency, H_nodes, n_points=3000)
 
         # print(f"Number of points in Graph G: {len(y_pc)}")
         # print(f"Number of points in Graph H: {len(output_pc)}")

@@ -554,7 +554,7 @@ def get_candidates_query(kdtree, position, all_nodes, matched_nodes, k=1, distan
     return unmatched_candidates
 
 
-def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=10):
+def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=5):
     candidates = kdtree.query_ball_point(position, r=radius, p=2)
 
     if isinstance(candidates, (int, np.integer)):
