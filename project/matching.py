@@ -644,7 +644,7 @@ def match_hierarchical(source, target, visualize=True):
     # make it deterministic by startig at root with min distance to its nearest candidate
     gt_root_distances = []
     for root in gt_roots:
-        unmatched_candidates = get_candidates_query(
+        unmatched_candidates = get_candidates_ball(
             pred_kdtree, source_positions[root], all_target_nodes, set()
         )
         if unmatched_candidates:
@@ -698,7 +698,7 @@ def match_hierarchical(source, target, visualize=True):
 
         ### STEP 1: Match the root node
 
-        unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[root], all_target_nodes,
+        unmatched_candidates = get_candidates_ball(pred_kdtree, source_positions[root], all_target_nodes,
                                                     pred_matched_nodes)
 
         target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
@@ -735,7 +735,7 @@ def match_hierarchical(source, target, visualize=True):
 
             cnode_semantic = gt_semantics.get(cnode)
             clabel = gt_labels[cnode]
-            unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[cnode], all_target_nodes,
+            unmatched_candidates = get_candidates_ball(pred_kdtree, source_positions[cnode], all_target_nodes,
                                                         pred_matched_nodes)
 
             if unmatched_candidates:
@@ -811,7 +811,7 @@ def match_hierarchical(source, target, visualize=True):
 
         # Step c: Query nearby GT nodes
         all_gt_nodes = list(source.nodes)
-        unmatched_gt_candidates = get_candidates_query(gt_kdtree, target_positions[pnode], all_gt_nodes,
+        unmatched_gt_candidates = get_candidates_ball(gt_kdtree, target_positions[pnode], all_gt_nodes,
                                                        gt_matched_nodes)
 
         if not unmatched_gt_candidates:
@@ -875,7 +875,7 @@ def match_hierarchical(source, target, visualize=True):
 
         cnode_semantic = gt_semantics.get(gnode)
         clabel = gt_labels[gnode]
-        unmatched_pred_candidates = get_candidates_query(pred_kdtree, source_positions[gnode], all_target_nodes,
+        unmatched_pred_candidates = get_candidates_ball(pred_kdtree, source_positions[gnode], all_target_nodes,
                                                          pred_matched_nodes)
 
         if not unmatched_pred_candidates:
