@@ -315,12 +315,12 @@ def create_graph_from_swc(fn, scale_factor=None, offset=None):
         split = line.split(" ")
         node_id = int(split[0])
         node_type = int(float(split[1]))
-        # x = float(split[2])*scale_factor[0]
-        # y = float(split[3])*scale_factor[1]
-        # z = float(split[4])*scale_factor[2]
-        x = round(float(split[2]))
-        y = round(float(split[3]))
-        z = round(float(split[4]))
+        x = float(split[2])*scale_factor[0]
+        y = float(split[3])*scale_factor[1]
+        z = float(split[4])*scale_factor[2]
+        # x = round(float(split[2]))
+        # y = round(float(split[3]))
+        # z = round(float(split[4]))
         if offset is not None:
             x = x + offset[0]
             y = y + offset[1]
