@@ -836,3 +836,70 @@ def reduce_graphs(gt, pred, matched, visualize=False):
     print("before passing to main: ", len(gt_reduced.nodes), len(pred_reduced.nodes))
 
     return gt_reduced, pred_reduced, matched
+
+
+def write_swc_line(graph, cnode, cparent, f, cnode_relabeled=-1):
+    # output skeleton to swc
+    # node_id, node_type, x, y, z, diameter, parent_id
+    if cnode_relabeled != -1:
+        cnode_name = cnode_relabeled
+    else:
+        cnode_name = cnode
+    line = "%i %i %f %f %f %f %i\n" % (
+        cnode_name,
+        0, #graph.nodes[cnode]['node_type']
+        graph.nodes[cnode]["coord"][0],
+        graph.nodes[cnode]["coord"][1],
+        graph.nodes[cnode]["coord"][2],
+        graph.nodes[cnode]['radius'],
+        cparent
+    )
+    f.write(line)
+
+
+def traverse_graph(graph, cnode, cparent, visited, f, cnode_relabeled=-1):
+    write_swc_line(graph, cnode, cparent, f, cnode_relabeled)
+    visited.append(cnode)
+    if cnode_relabeled != -1:
+        node_cnt = cnode_relabeled
+    else:
+        node_cnt = cnode
+    for neighbor in graph.neighbors(cnode):
+        if neighbor not in visited:
+            if cnode_relabeled != -1:
+                visited, cnt = traverse_graph(
+                    graph, neighbor, cnode_relabeled, visited, f,
+                    node_cnt + 1
+                )
+                node_cnt = cnt
+            else:
+                visited, cnt = traverse_graph(
+                    graph, neighbor, cnode, visited, f)
+                node_cnt = neighbor
+
+    return visited, node_cnt
+
+
+def write_swc(graph, outfn):
+    print(outfn)
+    sys.setrecursionlimit(5000)
+    f = open(outfn, "w")
+    node_id_cnt = 1
+    visited = []
+    graph = graph.to_undirected()
+    # iterate through connected components
+    for cc in nx.connected_components(graph):
+        # find start point
+        nodes = sorted(list(cc))
+        start_node = nodes[0]
+        for node in nodes:
+            if nx.degree(graph, node) == 1:
+                start_node = node
+                break
+        visited, cnt = traverse_graph(
+            graph, start_node, -1, visited, f, node_id_cnt
+        )
+        node_id_cnt = len(visited) + 1
+
+    f.close()
+
