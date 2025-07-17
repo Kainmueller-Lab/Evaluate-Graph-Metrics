@@ -5,7 +5,7 @@ from collections import defaultdict
 
 
 GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/test_GT_graph/"
-PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/experiments/random_crops_augments_50i_20c_1000c/test_180/teasar_swc/"
+PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/unet_baseline/test_data_baseline/TEASAR_output/baseline/"
 #GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/ground_truth_graph/"
 # PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/vesselformer/teasar_swc/"
 MAIN_SCRIPT = "main.py"
