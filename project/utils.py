@@ -772,7 +772,7 @@ def compute_vesselformer_metrics(args, Gs, Hs, matcheds):
     compute_node_metrics = True
     compute_edge_metrics = True
 
-    max_det = 4000
+    max_det = 8000
     metrics = tuple([COCOMetric(classes=['Node'], per_class=False, verbose=False, max_detection=(max_det,))])
     iou_thresholds = get_unique_iou_thresholds(metrics)
     iou_mapping = get_indices_of_iou_for_each_metric(iou_thresholds, metrics)
