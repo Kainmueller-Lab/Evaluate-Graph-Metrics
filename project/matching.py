@@ -121,7 +121,7 @@ def match_nearest_within_radius(source, target):
     return match_dict
 
 
-def match_one_to_one_ball(source, target, matching_dist="fixed",
+def match_one_to_one(source, target, matching_dist="fixed",
                      max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
@@ -190,7 +190,7 @@ def match_one_to_one_ball(source, target, matching_dist="fixed",
 
     return match_dict
 
-def match_one_to_one(source, target, matching_dist="fixed",
+def match_one_to_one_query(source, target, matching_dist="fixed",
                      max_distance=10, visualize=False):
     """
     Matches source nodes to the nearest available target node within a given radius.
