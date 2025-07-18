@@ -59,7 +59,7 @@ def main():
         H = read_graph_from_file("tests/toygraph_predicted.swc")
 
 
-    matching_type = MatchingType.One_to_One
+    matching_type = MatchingType.Hierarchical
     matched = match_graphs(
         source=G,
         target=H,
