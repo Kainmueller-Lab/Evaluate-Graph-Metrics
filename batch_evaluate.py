@@ -4,10 +4,14 @@ import re
 from collections import defaultdict
 
 
-GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/test_GT_graph/"
-PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/unet_baseline/test_data_baseline/TEASAR_output/baseline/"
-#GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/ground_truth_graph/"
+# GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/1738_GT/"
+# PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/finetuning_real_data/teasar_swc/1738/"
+# GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/ground_truth_graph/"
 # PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/vesselformer/teasar_swc/"
+GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/qualitative_figures/false_merges/GT/"
+PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/qualitative_figures/false_merges/pred/"
+# GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/resampling_lisa/GT/"
+# PRED_DIR = "//mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/resampling_lisa/output_pred/"
 MAIN_SCRIPT = "main.py"
 
 MATCHING = "hierarchical"

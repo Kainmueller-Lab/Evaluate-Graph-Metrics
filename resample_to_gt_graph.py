@@ -65,7 +65,7 @@ def main():
         target=H,
         matching_type=matching_type,
         matching_dist="fixed",
-        max_distance=10,
+        max_distance=5,
         visualize=False)
     print(len(matched.keys()), G.number_of_nodes())
 
