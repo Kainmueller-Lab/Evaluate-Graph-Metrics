@@ -4,6 +4,8 @@ import sys
 import networkx as nx
 import numpy as np
 from scipy.spatial import KDTree
+from scipy.optimize import linear_sum_assignment
+
 import time
 
 from enum import Enum
@@ -20,6 +22,7 @@ class MatchingType(Enum):
     Greedy_with_parent = 4
     Hierarchical = 5
     One_to_One = 6 # Matches to nearest candidate within radius and removes it from candidate list.
+    Hungarian = 7
     # TODO: Graph matching solution? Could improve this, but unclear if efficient.
 
 
@@ -41,7 +44,8 @@ def match_graphs(source, target, matching_type, matching_dist="fixed",
         - MatchingType.Nearest: Matches each source node to the nearest target node. Many-to-one matching allowed. All source nodes are matched.
         - MatchingType.Nearest_Within_Radius: Matches each source node to the nearest target node within a radius. Many-to-one matching allowed. Source nodes may not be matched.
         - MatchingType.Greedy: Matches each source node to the nearest target node within its radius in a greedy fashion. One-to-one. If no target node is within the radius, the source node is not matched.
-
+        - MatchingType.Hungarian: Uses the Hungarian algorithm for optimal one-to-at-most-one matching based on distance.
+        
     Returns:
     -------
     match_dict : dict
@@ -68,8 +72,8 @@ def match_graphs(source, target, matching_type, matching_dist="fixed",
         return match_one_to_one(
             source=source, target=target, matching_dist=matching_dist,
             max_distance=max_distance, visualize=visualize)
-    #NOTE: in linajea https://www.nature.com/articles/s41587-022-01427-7 they
-    # do hungarian matching on edges
+    if matching_type == MatchingType.Hungarian:
+        return match_hungarian(source=source, target=target, unmatch_penalty=max_distance)
     return {}
 
 
@@ -944,6 +948,57 @@ def match_hierarchical(source, target, visualize=True):
     return match_dict
 
 
+def match_hungarian(source, target, unmatch_penalty):
+    """
+    Perform Hungarian node matching between two directed graphs (source, target)
+    using 3D node coordinates. Allows non-assignment via dummy nodes.
+    NOTE: in linajea https://www.nature.com/articles/s41587-022-01427-7 they do hungarian matching on edges
+
+    Parameters
+    ----------
+    source :
+        Ground-truth graph with node attributes 'x', 'y', 'z'.
+    target :
+        Predicted graph with node attributes 'x', 'y', 'z'.
+    unmatch_penalty : float, optional
+        Cost assigned to leaving a node unmatched. Larger -> fewer unmatches.
+        NOTE: Set this to the threshold distance for matching.
+
+    Returns
+    -------
+    dict
+        Mapping {sourcet_node: target_node or None}
+    """
+    # Extract node lists and coordinates
+    source_nodes = list(source.nodes)
+    target_nodes = list(target.nodes)
+
+    source_coords = np.array([[source.nodes[n]['x'], source.nodes[n]['y'], source.nodes[n]['z']]
+                              for n in source_nodes])
+    target_coords = np.array([[target.nodes[n]['x'], target.nodes[n]['y'], target.nodes[n]['z']]
+                              for n in target_nodes])
+
+    n, m = len(source_nodes), len(target_nodes)
+    cost = np.linalg.norm(source_coords[:, None, :] - target_coords[None, :, :], axis=2)
+
+    # Pad cost matrix to allow non-assignment
+    size = max(n, m)
+    padded_cost = np.full((size, size), unmatch_penalty, dtype=float)
+    padded_cost[:n, :m] = cost
+
+    # Hungarian matching
+    row_ind, col_ind = linear_sum_assignment(padded_cost)
+
+    # Construct mapping
+    mapping = {}
+    for i, j in zip(row_ind, col_ind):
+        if i < n:
+            if j < m and padded_cost[i, j] < unmatch_penalty:
+                mapping[source_nodes[i]] = target_nodes[j]
+            else:
+                mapping[source_nodes[i]] = None
+
+    return mapping
 
 
 
