@@ -2,10 +2,42 @@ import unittest
 import networkx as nx
 import numpy as np
 
-from project.matching import match_graphs, MatchingType, match_hungarian, match_hierarchical, match_one_to_one, match_one_to_one_query
+from project.matching import match_graphs, MatchingType, match_hungarian, match_hierarchical, match_one_to_one, match_one_to_one_query, match_hierarchical
+from project.metrics import evaluate_all_metrics
 
 import logging
 logging.basicConfig(level=logging.INFO)
+
+
+def load_swc_to_digraph(path: str) -> nx.DiGraph:
+    """
+    Load an SWC file into a NetworkX DiGraph.
+    Each node has:
+        - 'coord': np.array([x, y, z])
+        - 'radius': float
+    Edges are directed parent -> child.
+    """
+    g = nx.DiGraph()
+
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            parts = line.split()
+            if len(parts) < 7:
+                continue
+
+            nid = int(parts[0])
+            x, y, z = map(float, parts[2:5])
+            r = float(parts[5])
+            parent = int(parts[6])
+
+            g.add_node(nid, coord=np.array([x, y, z]), radius=r)
+            if parent != -1 and parent != -2 and parent != 0:
+                g.add_edge(parent, nid)
+    return g
 
 
 
@@ -448,6 +480,74 @@ class TestHungarianMatching(unittest.TestCase):
         true_result = {2: 1, 3: 2, 4: 3}
         self.assertDictEqual(result, true_result)
 
+
+    def test_unmatching_of_distinct_branches(self):
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 1]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 2]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 3]), 'radius': 1}),
+            (5, {'coord': np.array([-0.5, 0, 2]), 'radius': 1}),
+            (6, {'coord': np.array([-1, 0, 2]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
+
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0, 0, 0.1]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 1.1]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 2.1]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 3.1]), 'radius': 1}),
+            (5, {'coord': np.array([0.5, 0, 1.1]), 'radius': 1}),
+            (6, {'coord': np.array([1, 0, 1.1]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
+
+        result = match_hungarian(G, H, unmatch_penalty=0.3)
+        true_result = {1: 1, 2: 2, 3: 3, 4: 4}
+        self.assertDictEqual(result, true_result)
+
+
+    # NOTE: Uncomment these tests for a direct comparison of the results of the different methods.
+    # For 42_BP it turns out that hierarchical matching has by far less FM and FS, while being only slightly worse w.r.t. to edge-F1 score.
+    
+    # def test_toygraph(self):
+    #     G = load_swc_to_digraph('tests/toygraph_GT.swc')
+    #     H = load_swc_to_digraph('tests/toygraph_predicted.swc')
+
+    #     matching = match_hungarian(G, H, unmatch_penalty=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_one_to_one(G, H, max_distance=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_one_to_one_query(G, H, max_distance=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_hierarchical(G, H)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+
+
+    # def test_42_BP(self):
+    #     G = load_swc_to_digraph('tests/42_BP_GT.swc')
+    #     H = load_swc_to_digraph('tests/42_BP.swc')
+
+    #     matching = match_hungarian(G, H, unmatch_penalty=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_one_to_one(G, H, max_distance=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_one_to_one_query(G, H, max_distance=10)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+    #     matching = match_hierarchical(G, H)
+    #     results_dict = evaluate_all_metrics(G, H, matching)
+    #     print(results_dict)
+
+        
 
 if __name__ == "__main__":
     unittest.main()

@@ -948,7 +948,7 @@ def match_hierarchical(source, target, visualize=True):
     return match_dict
 
 
-def match_hungarian(source, target, unmatch_penalty):
+def match_hungarian(source, target, unmatch_penalty, visualize=False):
     """
     Perform Hungarian node matching between two directed graphs (source, target)
     using 3D node coordinates. Allows non-assignment via dummy nodes.
@@ -989,16 +989,19 @@ def match_hungarian(source, target, unmatch_penalty):
     row_ind, col_ind = linear_sum_assignment(padded_cost)
 
     # Construct mapping
-    mapping = {}
+    match_dict = {}
     for i, j in zip(row_ind, col_ind):
         if i < n:
             if j < m and padded_cost[i, j] < unmatch_penalty:
-                mapping[source_nodes[i]] = target_nodes[j]
+                match_dict[source_nodes[i]] = target_nodes[j]
             # NOTE: We do not explicitly store unmatched nodes as None
             # else:
             #     mapping[source_nodes[i]] = None
 
-    return mapping
+    # if visualize:
+    #     visualize_matching(source, target, match_dict)
+
+    return match_dict
 
 
 
