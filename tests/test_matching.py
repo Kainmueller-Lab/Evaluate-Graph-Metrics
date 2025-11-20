@@ -2,7 +2,7 @@ import unittest
 import networkx as nx
 import numpy as np
 
-from project.matching import match_graphs, MatchingType, match_hungarian, match_hierarchical
+from project.matching import match_graphs, MatchingType, match_hungarian, match_hierarchical, match_one_to_one, match_one_to_one_query
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -283,90 +283,171 @@ class TestHierarchicalMatching(unittest.TestCase):
 
 class TestHungarianMatching(unittest.TestCase):
     def test_simple_match_graphs(self):
-        g1 = nx.DiGraph()
-        g2 = nx.DiGraph()
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1, 1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
 
-        # toy example
-        for i, c in enumerate([(0, 0, 0), (1, 1, 1), (2, 0, 0)]):
-            g1.add_node(i, x=c[0], y=c[1], z=c[2])
-        for j, c in enumerate([(0.1, 0, 0), (1.2, 1.1, 1), (5, 5, 5)]):
-            g2.add_node(j, x=c[0], y=c[1], z=c[2])
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1.2, 1.1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([5, 5, 5]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
 
-        result = match_graphs(g1, g2, MatchingType.Hungarian)
-        self.assertDictEqual(result, {0: 0, 1: 1, 2: 2})
+        result = match_graphs(G, H, MatchingType.Hungarian)
+        self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
 
     def test_simple_match_hungarian(self):
-        g1 = nx.DiGraph()
-        g2 = nx.DiGraph()
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1, 1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)  
 
-        # toy example
-        for i, c in enumerate([(0, 0, 0), (1, 1, 1), (2, 0, 0)]):
-            g1.add_node(i, x=c[0], y=c[1], z=c[2])
-        for j, c in enumerate([(0.1, 0, 0), (1.2, 1.1, 1), (5, 5, 5)]):
-            g2.add_node(j, x=c[0], y=c[1], z=c[2])
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1.2, 1.1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([5, 5, 5]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
 
-        result = match_hungarian(g1, g2, unmatch_penalty=1e3)
-        self.assertDictEqual(result, {0: 0, 1: 1, 2: 2})
+        result = match_hungarian(G, H, unmatch_penalty=1e3)
+        self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
     
     def test_match_hungarian_with_low_unmatch_penalty(self):
-        g1 = nx.DiGraph()
-        g2 = nx.DiGraph()
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1, 1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
 
-        # toy example
-        for i, c in enumerate([(0, 0, 0), (1, 1, 1), (2, 0, 0)]):
-            g1.add_node(i, x=c[0], y=c[1], z=c[2])
-        for j, c in enumerate([(0.1, 0, 0), (1.2, 1.1, 1), (5, 5, 5)]):
-            g2.add_node(j, x=c[0], y=c[1], z=c[2])
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0.1, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1.2, 1.1, 1]), 'radius': 1}),
+            (3, {'coord': np.array([5, 5, 5]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
 
-        result = match_hungarian(g1, g2, unmatch_penalty=3)
-        self.assertDictEqual(result, {0: 0, 1: 1, 2: None})
+        result = match_hungarian(G, H, unmatch_penalty=3)
+        self.assertDictEqual(result, {1: 1, 2: 2})
+
 
     def test_unmatch_penalty(self):
-        g1 = nx.DiGraph()
-        g2 = nx.DiGraph()
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([1, 0, 0]), 'radius': 1}),
+            (3, {'coord': np.array([2, 0, 0]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
 
-        # toy example
-        for i, c in enumerate([(0, 0, 0), (1, 0, 0), (2, 0, 0)]):
-            g1.add_node(i, x=c[0], y=c[1], z=c[2])
-        for i, c in enumerate([(0, 0, 5), (1, 0, 5), (2, 0, 5)]):
-            g2.add_node(i, x=c[0], y=c[1], z=c[2])
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0, 0, 5]), 'radius': 1}),
+            (2, {'coord': np.array([1, 0, 5]), 'radius': 1}),
+            (3, {'coord': np.array([2, 0, 5]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
 
-        result = match_hungarian(g1, g2, unmatch_penalty=4.9)
-        self.assertDictEqual(result, {0: None, 1: None, 2: None})
+        result = match_hungarian(G, H, unmatch_penalty=4.9)
+        self.assertDictEqual(result, {})
 
-        result = match_hungarian(g1, g2, unmatch_penalty=5.1)
-        self.assertDictEqual(result, {0: 0, 1: 1, 2: 2})
+        result = match_hungarian(G, H, unmatch_penalty=5.1)
+        self.assertDictEqual(result, {1: 1, 2: 2, 3: 3})
 
 
     def test_example(self):
-        g1 = nx.DiGraph()
-        g2 = nx.DiGraph()
-
-        # Toy example where in g1 there are intermediate nodes (corresp. to subsampled nodes in GT) and g2
+        # Toy example where in G there are intermediate nodes (corresp. to subsampled nodes in GT) and H
         # has only the key nodes. Ideally, the matching should assign the corresponding key notes,
         # and leave the intermediate nodes unmatched.
-        node_list  = [(0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3)]
-        intermediate_node_list = [(0, 0, 0), (0, 0, 0.2), (0, 0, 0.4), (0, 0, 0.6), (0, 0, 0.8),
-                                  (0, 0, 1), (0, 0, 1.2), (0, 0, 1.4), (0, 0, 1.6), (0, 0, 1.8),
-                                  (0, 0, 2), (0, 0, 2.2), (0, 0, 2.4), (0, 0, 2.6), (0, 0, 2.8),
-                                  (0, 0, 3)]
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 1]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 2]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 3]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
 
-        for i, c in enumerate(intermediate_node_list):
-            g1.add_node(i, x=c[0], y=c[1], z=c[2])
-        
-        for i, c in enumerate(node_list):
-            g2.add_node(i, x=c[0], y=c[1], z=c[2])
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 0.2]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 0.4]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 0.6]), 'radius': 1}),
+            (5, {'coord': np.array([0, 0, 0.8]), 'radius': 1}),
+            (6, {'coord': np.array([0, 0, 1]), 'radius': 1}),
+            (7, {'coord': np.array([0, 0, 1.2]), 'radius': 1}),
+            (8, {'coord': np.array([0, 0, 1.4]), 'radius': 1}),
+            (9, {'coord': np.array([0, 0, 1.6]), 'radius': 1}),
+            (10, {'coord': np.array([0, 0, 1.8]), 'radius': 1}),
+            (11, {'coord': np.array([0, 0, 2]), 'radius': 1}),
+            (12, {'coord': np.array([0, 0, 2.2]), 'radius': 1}),
+            (13, {'coord': np.array([0, 0, 2.4]), 'radius': 1}),
+            (14, {'coord': np.array([0, 0, 2.6]), 'radius': 1}),
+            (15, {'coord': np.array([0, 0, 2.8]), 'radius': 1}),
+            (16, {'coord': np.array([0, 0, 3]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
 
-        result = match_hungarian(g1, g2, unmatch_penalty=0.15)
-        true_result = {0: 0, 1: None, 2: None, 3: None, 4: None,
-                       5: 1, 6: None, 7: None, 8: None, 9: None,
-                       10: 2, 11: None, 12: None, 13: None, 14: None,
-                       15: 3}
+        result = match_hungarian(G, H, unmatch_penalty=0.15)
+        true_result = {1: 1, 2: 6, 3: 11, 4: 16}
+        self.assertDictEqual(result, true_result)
+
+        result = match_hungarian(H, G, unmatch_penalty=0.15)
+        true_result = {1: 1, 6: 2, 11: 3, 16: 4}
         self.assertDictEqual(result, true_result)
     
-    # TODO: Add more elaborate example
+
+    def test_comparison_to_one_to_one(self):
+        G = nx.DiGraph()
+        nodes_G = [
+            (1, {'coord': np.array([0, 0, 0]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 1]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 2]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 3]), 'radius': 1}),
+        ]
+        G.add_nodes_from(nodes_G)
+        
+        # Translate all nodes by (0,0,0.8), but H is isomorphic to G
+        H = nx.DiGraph()
+        nodes_H = [
+            (1, {'coord': np.array([0, 0, 0.8]), 'radius': 1}),
+            (2, {'coord': np.array([0, 0, 1.8]), 'radius': 1}),
+            (3, {'coord': np.array([0, 0, 2.8]), 'radius': 1}),
+            (4, {'coord': np.array([0, 0, 3.8]), 'radius': 1}),
+        ]
+        H.add_nodes_from(nodes_H)
+    
+        result = match_hungarian(G, H, unmatch_penalty=0.3)
+        true_result = {2: 1, 3: 2, 4: 3}
+        self.assertDictEqual(result, true_result)
+
+        result = match_hungarian(G, H, unmatch_penalty=5)
+        true_result = {1: 1, 2: 2, 3: 3, 4: 4}
+        self.assertDictEqual(result, true_result)
+
+        result = match_one_to_one(G, H, max_distance=5)
+        true_result = {1: 4, 2: 1, 3: 2, 4: 3}
+        self.assertDictEqual(result, true_result)
+
+        result = match_one_to_one_query(G, H, max_distance=5)
+        true_result = {2: 1, 3: 2, 4: 3}
+        self.assertDictEqual(result, true_result)
+
 
 if __name__ == "__main__":
     unittest.main()

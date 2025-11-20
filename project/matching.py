@@ -957,9 +957,9 @@ def match_hungarian(source, target, unmatch_penalty):
     Parameters
     ----------
     source :
-        Ground-truth graph with node attributes 'x', 'y', 'z'.
+        Ground-truth graph
     target :
-        Predicted graph with node attributes 'x', 'y', 'z'.
+        Predicted graph
     unmatch_penalty : float, optional
         Cost assigned to leaving a node unmatched. Larger -> fewer unmatches.
         NOTE: Set this to the threshold distance for matching.
@@ -969,20 +969,19 @@ def match_hungarian(source, target, unmatch_penalty):
     dict
         Mapping {sourcet_node: target_node or None}
     """
-    # Extract node lists and coordinates
-    source_nodes = list(source.nodes)
-    target_nodes = list(target.nodes)
+    source_positions = nx.get_node_attributes(source, 'coord')
+    source_nodes = list(source_positions.keys())
+    source_coords = np.array([source_positions[node] for node in source_nodes])
 
-    source_coords = np.array([[source.nodes[n]['x'], source.nodes[n]['y'], source.nodes[n]['z']]
-                              for n in source_nodes])
-    target_coords = np.array([[target.nodes[n]['x'], target.nodes[n]['y'], target.nodes[n]['z']]
-                              for n in target_nodes])
+    target_positions = nx.get_node_attributes(target, 'coord')
+    target_nodes = list(target_positions.keys())
+    target_coords = np.array([target_positions[node] for node in target_nodes])
 
     n, m = len(source_nodes), len(target_nodes)
     cost = np.linalg.norm(source_coords[:, None, :] - target_coords[None, :, :], axis=2)
 
     # Pad cost matrix to allow non-assignment
-    size = max(n, m)
+    size = n+m # NOTE: This adds additional dummy nodes to allow all nodes to be unmatched
     padded_cost = np.full((size, size), unmatch_penalty, dtype=float)
     padded_cost[:n, :m] = cost
 
@@ -995,8 +994,9 @@ def match_hungarian(source, target, unmatch_penalty):
         if i < n:
             if j < m and padded_cost[i, j] < unmatch_penalty:
                 mapping[source_nodes[i]] = target_nodes[j]
-            else:
-                mapping[source_nodes[i]] = None
+            # NOTE: We do not explicitly store unmatched nodes as None
+            # else:
+            #     mapping[source_nodes[i]] = None
 
     return mapping
 
