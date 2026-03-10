@@ -5,7 +5,7 @@ import argparse
 from project.metrics import evaluate_all_metrics
 from project.matching import match_graphs, MatchingType
 from project.utils import read_graph_from_file, resample_graph, reduce_graphs,\
-        visualize_matching
+        visualize_matching, resample_prediction_to_gt
 from project.toydata import *
 import glob
 import os
@@ -33,7 +33,7 @@ def get_arguments():
     parser.add_argument(
         "--matching", type=str, default="one_to_one",
         choices=["hierarchical", "nearest", "nearest_with_radius", "greedy",
-                 "greedy_with_parent", "one_to_one"], #TODO: check if we can unify here
+                 "greedy_with_parent", "one_to_one", "hungarian"], #TODO: check if we can unify here
         help="choose matching method to assign pred to gt nodes"
     )
     parser.add_argument(
@@ -42,7 +42,7 @@ def get_arguments():
         help="specify if matching distance should be based on gt radius or fixed distance"
     )
     parser.add_argument(
-        "--max_distance", type=int, default=10,
+        "--max_distance", type=float, default=10,
         help="maximal distance to match gt and pred points"
     )
     parser.add_argument(
@@ -71,12 +71,25 @@ def get_arguments():
         help="flag to set logging to DEBUG"
     )
 
+    parser.add_argument(
+        "--candidate_selection", type=str, default="query",
+        choices=["query", "ball"],
+        help="method to select matching candidates"
+    )
+
+    parser.add_argument(
+        "--resample_to_gt", action="store_true", default=False,
+        help="clean prediction graph using GT-guided degree-2 node removal"
+    )
+
     args = parser.parse_args()
     return args
 
 
 def main():
     args = get_arguments()
+
+    print("args.resample_to_gt:", args.resample_to_gt)
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
@@ -106,6 +119,7 @@ def main():
         logger.info("number of nodes in G resampled: %i" % G_resampled.number_of_nodes())
         logger.info("number of nodes in H resampled: %i" % H_resampled.number_of_nodes())
 
+
     # 3) Match graphs
     # Match target graph (e.g. prediction) to source graph (e.g. ground truth)
     # The matching variable is a dictionary that maps nodes in target graph to
@@ -117,22 +131,45 @@ def main():
         matching_type = MatchingType.One_to_One
     elif args.matching == "nearest":
         matching_type = MatchingType.Nearest
+    elif args.matching == "hungarian":
+        matching_type = MatchingType.Hungarian
     else:
         raise NotImplementedError
 
+    # resample according to Lisa's trick
+
+    if args.resample_to_gt:
+        print("Before resample_to_gt, H nodes:", H.number_of_nodes())
+        G_for_eval = G
+        H_for_eval, _ = resample_prediction_to_gt(
+            G,
+            H,
+            matching_type=matching_type if 'matching_type' in locals() else MatchingType.Hierarchical,
+            matching_dist=args.matching_dist,
+            max_distance=args.max_distance,
+            visualize=args.visualize,
+            candidate_selection=args.candidate_selection,
+        )
+        print("Before resample_to_gt, H nodes:", H.number_of_nodes())
+    else:
+        G_for_eval = G
+        H_for_eval = H
+
     matched = match_graphs(
-        source=G_resampled if args.resample else G,
-        target=H_resampled if args.resample else H,
+        source=G_resampled if args.resample else G_for_eval,
+        target=H_resampled if args.resample else H_for_eval,
         matching_type=matching_type,
         matching_dist=args.matching_dist,
         max_distance=args.max_distance,
-        visualize=args.visualize)
+        visualize=args.visualize,
+        candidate_selection=args.candidate_selection
+    )
 
     # 4) Reduce graph to have only branching and end points and their matched counterparts
     if args.reduce_graph:
         G_reduced, H_reduced, matched_reduced = reduce_graphs(
-            G_resampled if args.resample else G,
-            H_resampled if args.resample else H,
+            G_resampled if args.resample else G_for_eval,
+            H_resampled if args.resample else H_for_eval,
             matched
         )
         if args.visualize:
@@ -148,16 +185,16 @@ def main():
         H_for_comp = H_resampled
         matched_for_comp = matched
     else:
-        G_for_comp = G
-        H_for_comp = H
+        G_for_comp = G_for_eval
+        H_for_comp = H_for_eval
         matched_for_comp = matched
 
     results_dict = evaluate_all_metrics(
         G_for_comp, H_for_comp, matched_for_comp,
         smd=args.smd,
         visualize=args.visualize,
-        G_resampled=G_resampled if args.resample else G,
-        H_resampled=H_resampled if args.resample else H
+        G_resampled=G_resampled if args.resample else G_for_eval,
+        H_resampled=H_resampled if args.resample else H_for_eval
     )
 
     # 6) Print results / TODO: save as json or csv file

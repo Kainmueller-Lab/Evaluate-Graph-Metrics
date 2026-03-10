@@ -175,8 +175,8 @@ def compute_edge_metrics(G, H, matched, visualize=True):
     H_copy.remove_edges_from(total_false_merges)
     false_splits = np.abs(nx.number_weakly_connected_components(G) - nx.number_weakly_connected_components(H_copy))
 
-    if visualize == True:
-        visualization(G, H, total_false_merges, false_splits, matched)
+    # if visualize == True:
+    #     visualization(G, H, total_false_merges, false_splits, matched)
 
     # print("false_merges:", len(false_merges))
 
@@ -903,3 +903,60 @@ def write_swc(graph, outfn):
 
     f.close()
 
+import networkx as nx
+
+from project.matching import match_graphs, MatchingType
+
+
+def resample_prediction_to_gt(
+    G,
+    H,
+    matching_type=MatchingType.Hierarchical,
+    matching_dist="fixed",
+    max_distance=5,
+    visualize=False,
+    candidate_selection="ball",
+):
+
+    matched = match_graphs(
+        source=G,
+        target=H,
+        matching_type=matching_type,
+        matching_dist=matching_dist,
+        max_distance=max_distance,
+        visualize=visualize,
+        candidate_selection=candidate_selection,
+    )
+
+    H_clean = H.copy()
+
+    unmatched_deg2_nodes = []
+    matched_targets = set(matched.values())
+
+    for node in list(H_clean.nodes()):
+        if node not in matched_targets and H_clean.degree(node) == 2:
+            unmatched_deg2_nodes.append(node)
+
+    for node in unmatched_deg2_nodes:
+        if node not in H_clean:
+            continue
+
+        if isinstance(H_clean, nx.DiGraph):
+            predecessors = list(H_clean.predecessors(node))
+            successors = list(H_clean.successors(node))
+
+            if len(predecessors) == 1 and len(successors) == 1:
+                pred = predecessors[0]
+                succ = successors[0]
+                if not H_clean.has_edge(pred, succ):
+                    H_clean.add_edge(pred, succ)
+                H_clean.remove_node(node)
+        else:
+            neighbors = list(H_clean.neighbors(node))
+            if len(neighbors) == 2:
+                n1, n2 = neighbors
+                if not H_clean.has_edge(n1, n2):
+                    H_clean.add_edge(n1, n2)
+                H_clean.remove_node(node)
+
+    return H_clean, matched

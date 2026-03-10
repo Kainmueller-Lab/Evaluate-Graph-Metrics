@@ -2,21 +2,37 @@ import os
 import subprocess
 import re
 from collections import defaultdict
-
+import yaml
 
 # GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/1738_GT/"
 # PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/finetuning_real_data/teasar_swc/1738/"
 # GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/ground_truth_graph/"
 # PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/whole_pipeline_with_zarr_funlib/vesselformer/teasar_swc/"
-GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/ablation_experiments/experiments/exp/unet+roots+vec+adp_mask+pp/evaluation/GT/"
-PRED_DIR = "/mnt/md0/rajalakshmi/Unet_seg/ablation_experiments/experiments/exp/unet+roots+vec+adp_mask+pp/evaluation/pred/"
 # GT_DIR = "/mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/resampling_lisa/GT/"
 # PRED_DIR = "//mnt/md0/rajalakshmi/Unet_seg/real_data/catmaid_annotations/resampling_lisa/output_pred/"
-MAIN_SCRIPT = "main.py"
 
-MATCHING = "hierarchical"
-MATCHING_DIST = "fixed"
 
+with open("eval_config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+dataset_name = config["active_dataset"]
+
+if dataset_name not in config["evaluation_by_dataset"]:
+    raise ValueError(f"Dataset '{dataset_name}' not found in config.yaml")
+
+GT_DIR = config["paths"]["gt_dir"]
+PRED_DIR = config["paths"]["pred_dir"]
+MAIN_SCRIPT = config["paths"]["main_script"]
+
+eval_cfg = config["evaluation_by_dataset"][dataset_name]
+
+MATCHING = eval_cfg["matching"]
+MATCHING_DIST = eval_cfg["matching_dist"]
+CANDIDATE_SELECTION = eval_cfg["candidate_selection"]
+MAX_DISTANCE = eval_cfg["max_distance"]
+RESAMPLE_TO_GT = eval_cfg["resample_to_gt"]
+
+print(f"Using evaluation config for dataset: {dataset_name}")
 
 pattern = re.compile(r"^(\w+):\s+([-+]?[0-9]*\.?[0-9]+)$")
 
@@ -41,8 +57,13 @@ for filename in os.listdir(GT_DIR):
         "--pred_fn", pred_path,
         "--matching", MATCHING,
         "--matching_dist", MATCHING_DIST,
+        "--candidate_selection", CANDIDATE_SELECTION,
+        "--max_distance", str(MAX_DISTANCE),
         "--smd"
     ]
+    if RESAMPLE_TO_GT:
+        cmd.append("--resample_to_gt")
+    print(cmd)
 
     try:
 

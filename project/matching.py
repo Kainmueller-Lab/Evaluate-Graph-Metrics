@@ -27,7 +27,7 @@ class MatchingType(Enum):
 
 
 def match_graphs(source, target, matching_type, matching_dist="fixed",
-                 max_distance=10, visualize=False):
+                 max_distance=10, visualize=False, candidate_selection="query"):
     """
     Matches nodes from the source graph to nodes in the target graph based on the specified matching strategy.
 
@@ -65,16 +65,36 @@ def match_graphs(source, target, matching_type, matching_dist="fixed",
         return match_greedy(source=source, target=target)
     if matching_type == MatchingType.Greedy_with_parent:
         return match_greedy_parent(source=source, target=target)
+    # if matching_type == MatchingType.Hierarchical:
+    #     return match_hierarchical(source=source, target=target,
+    #                               visualize=visualize)
+    # if matching_type == MatchingType.One_to_One:
+    #     return match_one_to_one(
+    #         source=source, target=target, matching_dist=matching_dist,
+    #         max_distance=max_distance, visualize=visualize)
     if matching_type == MatchingType.Hierarchical:
-        return match_hierarchical(source=source, target=target,
-                                  visualize=visualize)
+        return match_hierarchical(
+            source=source,
+            target=target,
+            visualize=visualize,
+            candidate_selection=candidate_selection,
+            max_distance=max_distance
+        )
+
     if matching_type == MatchingType.One_to_One:
         return match_one_to_one(
-            source=source, target=target, matching_dist=matching_dist,
-            max_distance=max_distance, visualize=visualize)
+            source=source,
+            target=target,
+            matching_dist=matching_dist,
+            max_distance=max_distance,
+            visualize=visualize,
+            candidate_selection=candidate_selection
+        )
     if matching_type == MatchingType.Hungarian:
         return match_hungarian(source=source, target=target, unmatch_penalty=max_distance)
     return {}
+
+
 
 
 def match_nearest(source, target):
@@ -125,8 +145,136 @@ def match_nearest_within_radius(source, target):
     return match_dict
 
 
+# def match_one_to_one(source, target, matching_dist="fixed",
+#                      max_distance=5, visualize=False):
+#     """
+#     Matches source nodes to the nearest available target node within a given radius.
+#     Ensures a one-to-one matching: each target is used at most once.
+#     """
+#     match_dict = {}
+#     source_positions = nx.get_node_attributes(source, 'coord')
+#     source_nodes = list(source_positions.keys())
+#     source_coords = np.array([source_positions[node] for node in source_nodes])
+#     source_radii = nx.get_node_attributes(source, 'radius')
+#     source_radii = np.array([source_radii[k] for k in source_radii.keys()])
+#
+#     target_positions = nx.get_node_attributes(target, 'coord')
+#     target_nodes = list(target_positions.keys())  # Target node list
+#     target_coords = np.array([target_positions[node] for node in target_nodes])  # Nx2 or Nx3 matrix of coordinates
+#     target_kdtree = KDTree(target_coords)
+#
+#     match_dict = {}  # Store matched (source_idx, target_idx)
+#     used_targets = []  # Keep track of assigned target indices
+#     used_sources = []
+#     dists = []
+#     source_ids = []
+#     target_ids = []
+#
+#     # get distance between all gt-pred pairs
+#     if matching_dist == "fixed":
+#         k_neighbors = target_kdtree.query_ball_point(
+#             source_coords, [max_distance], return_length=True)
+#         kd_dists, kd_indices = target_kdtree.query(
+#             source_coords, k=max(k_neighbors), distance_upper_bound=max_distance)
+#     elif matching_dist == "radius":
+#         k_neighbors = target_kdtree.query_ball_point(
+#             source_coords, source_radii, return_length=True)
+#         kd_dists, kd_indices = target_kdtree.query(
+#             source_coords, k=max(k_neighbors))
+#     else:
+#         raise NotImplementedError
+#
+#     for i, (c_dists, c_ids) in enumerate(zip(kd_dists, kd_indices)):
+#         if type(c_dists) in [float, np.float32, np.float64]:
+#             c_dists = [c_dists]
+#             c_ids = [c_ids]
+#         for c_dist, c_id in zip(c_dists, c_ids):
+#             if not np.isinf(c_dist):
+#                 dists.append(c_dist)
+#                 source_ids.append(i)
+#                 target_ids.append(c_id)
+#
+#     sort_idx = np.argsort(dists)
+#     # sort dists and id lists in inreasing order
+#     dists = np.array(dists)[sort_idx]
+#     source_ids = np.array(source_ids)[sort_idx]
+#     target_ids = np.array(target_ids)[sort_idx]
+#
+#     # iterate through all gt-pred pairs
+#     for c_dist, c_source, c_target in zip(dists, source_ids, target_ids):
+#         c_source_nx = source_nodes[c_source]
+#         c_target_nx = target_nodes[c_target]
+#         # if nodes haven't been matched yet, match them
+#         if c_source_nx not in used_sources and c_target_nx not in used_targets:
+#             match_dict[c_source_nx] = c_target_nx
+#             used_targets.append(c_target_nx)
+#             used_sources.append(c_source_nx)
+#
+#     # if visualize:
+#     #     visualize_matching(source, target, match_dict)
+#
+#     return match_dict
+#
+# def match_one_to_one_query(source, target, matching_dist="fixed",
+#                      max_distance=10, visualize=False, candidate_selection="query"):
+#     """
+#     Matches source nodes to the nearest available target node within a given radius.
+#     Ensures a one-to-one matching: each target is used at most once.
+#     """
+#     match_dict = {}
+#     source_positions = nx.get_node_attributes(source, 'coord')
+#     source_nodes = list(source_positions.keys())
+#     source_coords = np.array([source_positions[node] for node in source_nodes])
+#     source_radii = nx.get_node_attributes(source, 'radius')
+#     source_radii = np.array([source_radii[k] for k in source_radii.keys()])
+#
+#     target_positions = nx.get_node_attributes(target, 'coord')
+#     target_nodes = list(target_positions.keys())
+#     target_coords = np.array([target_positions[node] for node in target_nodes])
+#     target_kdtree = KDTree(target_coords)
+#
+#     used_targets = set()
+#     used_sources = set()
+#
+#     dists = []
+#     source_ids = []
+#     target_ids = []
+#
+#     if matching_dist == "fixed":
+#         # Get only 1 nearest neighbor within max_distance
+#         kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=max_distance)
+#     elif matching_dist == "radius":
+#         kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=source_radii)
+#     else:
+#         raise NotImplementedError
+#
+#     # Collect valid (not inf) distances
+#     for i, (dist, idx) in enumerate(zip(kd_dists, kd_indices)):
+#         if not np.isinf(dist):
+#             dists.append(dist)
+#             source_ids.append(i)
+#             target_ids.append(idx)
+#
+#     sort_idx = np.argsort(dists)
+#     dists = np.array(dists)[sort_idx]
+#     source_ids = np.array(source_ids)[sort_idx]
+#     target_ids = np.array(target_ids)[sort_idx]
+#
+#     for dist, src_idx, tgt_idx in zip(dists, source_ids, target_ids):
+#         src_node = source_nodes[src_idx]
+#         tgt_node = target_nodes[tgt_idx]
+#         if src_node not in used_sources and tgt_node not in used_targets:
+#             match_dict[src_node] = tgt_node
+#             used_sources.add(src_node)
+#             used_targets.add(tgt_node)
+#
+#     # if visualize:
+#     #     visualize_matching(source, target, match_dict)
+#
+#     return match_dict
+
 def match_one_to_one(source, target, matching_dist="fixed",
-                     max_distance=10, visualize=False):
+                     max_distance=10, visualize=False, candidate_selection="query"):
     """
     Matches source nodes to the nearest available target node within a given radius.
     Ensures a one-to-one matching: each target is used at most once.
@@ -135,77 +283,9 @@ def match_one_to_one(source, target, matching_dist="fixed",
     source_positions = nx.get_node_attributes(source, 'coord')
     source_nodes = list(source_positions.keys())
     source_coords = np.array([source_positions[node] for node in source_nodes])
-    source_radii = nx.get_node_attributes(source, 'radius')
-    source_radii = np.array([source_radii[k] for k in source_radii.keys()])
 
-    target_positions = nx.get_node_attributes(target, 'coord')
-    target_nodes = list(target_positions.keys())  # Target node list
-    target_coords = np.array([target_positions[node] for node in target_nodes])  # Nx2 or Nx3 matrix of coordinates
-    target_kdtree = KDTree(target_coords)
-
-    match_dict = {}  # Store matched (source_idx, target_idx)
-    used_targets = []  # Keep track of assigned target indices
-    used_sources = []
-
-    # get distance between all gt-pred pairs
-    if matching_dist == "fixed":
-        k_neighbors = target_kdtree.query_ball_point(
-            source_coords, [max_distance], return_length=True)
-        kd_dists, kd_indices = target_kdtree.query(
-            source_coords, k=max(k_neighbors), distance_upper_bound=max_distance)
-    elif matching_dist == "radius":
-        k_neighbors = target_kdtree.query_ball_point(
-            source_coords, source_radii, return_length=True)
-        kd_dists, kd_indices = target_kdtree.query(
-            source_coords, k=max(k_neighbors))
-    else:
-        raise NotImplementedError
-    dists = []
-    source_ids = []
-    target_ids = []
-    for i, (c_dists, c_ids) in enumerate(zip(kd_dists, kd_indices)):
-        if type(c_dists) in [float, np.float32, np.float64]:
-            c_dists = [c_dists]
-            c_ids = [c_ids]
-        for c_dist, c_id in zip(c_dists, c_ids):
-            if not np.isinf(c_dist):
-                dists.append(c_dist)
-                source_ids.append(i)
-                target_ids.append(c_id)
-
-    sort_idx = np.argsort(dists)
-    # sort dists and id lists in inreasing order
-    dists = np.array(dists)[sort_idx]
-    source_ids = np.array(source_ids)[sort_idx]
-    target_ids = np.array(target_ids)[sort_idx]
-
-    # iterate through all gt-pred pairs
-    for c_dist, c_source, c_target in zip(dists, source_ids, target_ids):
-        c_source_nx = source_nodes[c_source]
-        c_target_nx = target_nodes[c_target]
-        # if nodes haven't been matched yet, match them
-        if c_source_nx not in used_sources and c_target_nx not in used_targets:
-            match_dict[c_source_nx] = c_target_nx
-            used_targets.append(c_target_nx)
-            used_sources.append(c_source_nx)
-
-    # if visualize:
-    #     visualize_matching(source, target, match_dict)
-
-    return match_dict
-
-def match_one_to_one_query(source, target, matching_dist="fixed",
-                     max_distance=16, visualize=False):
-    """
-    Matches source nodes to the nearest available target node within a given radius.
-    Ensures a one-to-one matching: each target is used at most once.
-    """
-    match_dict = {}
-    source_positions = nx.get_node_attributes(source, 'coord')
-    source_nodes = list(source_positions.keys())
-    source_coords = np.array([source_positions[node] for node in source_nodes])
-    source_radii = nx.get_node_attributes(source, 'radius')
-    source_radii = np.array([source_radii[k] for k in source_radii.keys()])
+    source_radii_dict = nx.get_node_attributes(source, 'radius')
+    source_radii = np.array([source_radii_dict[node] for node in source_nodes])
 
     target_positions = nx.get_node_attributes(target, 'coord')
     target_nodes = list(target_positions.keys())
@@ -219,20 +299,61 @@ def match_one_to_one_query(source, target, matching_dist="fixed",
     source_ids = []
     target_ids = []
 
-    if matching_dist == "fixed":
-        # Get only 1 nearest neighbor within max_distance
-        kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=max_distance)
-    elif matching_dist == "radius":
-        kd_dists, kd_indices = target_kdtree.query(source_coords, k=1, distance_upper_bound=source_radii)
-    else:
-        raise NotImplementedError
+    if candidate_selection == "query":
 
-    # Collect valid (not inf) distances
-    for i, (dist, idx) in enumerate(zip(kd_dists, kd_indices)):
-        if not np.isinf(dist):
-            dists.append(dist)
-            source_ids.append(i)
-            target_ids.append(idx)
+        if matching_dist == "fixed":
+            kd_dists, kd_indices = target_kdtree.query(
+                source_coords, k=1, distance_upper_bound=max_distance
+            )
+        elif matching_dist == "radius":
+            kd_dists, kd_indices = target_kdtree.query(
+                source_coords, k=1, distance_upper_bound=source_radii
+            )
+        else:
+            raise NotImplementedError
+
+        for i, (dist, idx) in enumerate(zip(kd_dists, kd_indices)):
+            if not np.isinf(dist):
+                dists.append(dist)
+                source_ids.append(i)
+                target_ids.append(idx)
+
+    elif candidate_selection == "ball":
+        if matching_dist == "fixed":
+            k_neighbors = target_kdtree.query_ball_point(
+                source_coords, [max_distance], return_length=True
+            )
+            if max(k_neighbors) == 0:
+                return {}
+            kd_dists, kd_indices = target_kdtree.query(
+                source_coords, k=max(k_neighbors), distance_upper_bound=max_distance
+            )
+        elif matching_dist == "radius":
+            k_neighbors = target_kdtree.query_ball_point(
+                source_coords, source_radii, return_length=True
+            )
+            if max(k_neighbors) == 0:
+                return {}
+            kd_dists, kd_indices = target_kdtree.query(
+                source_coords, k=max(k_neighbors)
+            )
+        else:
+            raise NotImplementedError
+
+        for i, (c_dists, c_ids) in enumerate(zip(kd_dists, kd_indices)):
+            if isinstance(c_dists, (float, np.float32, np.float64)):
+                c_dists = [c_dists]
+                c_ids = [c_ids]
+
+            for c_dist, c_id in zip(c_dists, c_ids):
+                if not np.isinf(c_dist):
+                    if matching_dist == "radius" and c_dist > source_radii[i]:
+                        continue
+                    dists.append(c_dist)
+                    source_ids.append(i)
+                    target_ids.append(c_id)
+    else:
+        raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
 
     sort_idx = np.argsort(dists)
     dists = np.array(dists)[sort_idx]
@@ -247,12 +368,7 @@ def match_one_to_one_query(source, target, matching_dist="fixed",
             used_sources.add(src_node)
             used_targets.add(tgt_node)
 
-    # if visualize:
-    #     visualize_matching(source, target, match_dict)
-
     return match_dict
-
-
 
 def match_greedy(source, target):
     '''
@@ -558,7 +674,7 @@ def get_candidates_query(kdtree, position, all_nodes, matched_nodes, k=1, distan
     return unmatched_candidates
 
 
-def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=5):
+def get_candidates_ball(kdtree, position, all_nodes, matched_nodes, radius=1.5):
     candidates = kdtree.query_ball_point(position, r=radius, p=2)
 
     if isinstance(candidates, (int, np.integer)):
@@ -615,7 +731,7 @@ def find_neighbor_tree_label(graph, node, pred_matched_labels, semantic_map, max
 
 
 
-def match_hierarchical(source, target, visualize=True):
+def match_hierarchical(source, target, visualize=True, candidate_selection="query", max_distance=10):
     start_time = time.time()
     match_dict = {}
     pred_matched_labels = {}
@@ -648,9 +764,18 @@ def match_hierarchical(source, target, visualize=True):
     # make it deterministic by startig at root with min distance to its nearest candidate
     gt_root_distances = []
     for root in gt_roots:
-        unmatched_candidates = get_candidates_query(
-            pred_kdtree, source_positions[root], all_target_nodes, set()
-        )
+        if candidate_selection == "query":
+            unmatched_candidates = get_candidates_query(
+                pred_kdtree, source_positions[root], all_target_nodes, set(),
+                distance_upper_bound=max_distance
+            )
+        elif candidate_selection == "ball":
+            unmatched_candidates = get_candidates_ball(
+                pred_kdtree, source_positions[root], all_target_nodes, set(),
+                radius=max_distance
+            )
+        else:
+            raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
         if unmatched_candidates:
             distances = [
                 np.linalg.norm(np.array(target_positions[n]) - np.array(source_positions[root]))
@@ -702,8 +827,18 @@ def match_hierarchical(source, target, visualize=True):
 
         ### STEP 1: Match the root node
 
-        unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[root], all_target_nodes,
-                                                    pred_matched_nodes)
+        if candidate_selection == "query":
+            unmatched_candidates = get_candidates_query(
+                pred_kdtree, source_positions[root], all_target_nodes, pred_matched_nodes,
+                distance_upper_bound=max_distance
+            )
+        elif candidate_selection == "ball":
+            unmatched_candidates = get_candidates_ball(
+                pred_kdtree, source_positions[root], all_target_nodes, pred_matched_nodes,
+                radius=max_distance
+            )
+        else:
+            raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
 
         target_debug_pos = np.array([97.37256, 77.50172, 111.5607])
         if np.allclose(source_positions[root], target_debug_pos, atol=1e-4):
@@ -739,8 +874,18 @@ def match_hierarchical(source, target, visualize=True):
 
             cnode_semantic = gt_semantics.get(cnode)
             clabel = gt_labels[cnode]
-            unmatched_candidates = get_candidates_query(pred_kdtree, source_positions[cnode], all_target_nodes,
-                                                        pred_matched_nodes)
+            if candidate_selection == "query":
+                unmatched_candidates = get_candidates_query(
+                    pred_kdtree, source_positions[cnode], all_target_nodes, pred_matched_nodes,
+                    distance_upper_bound=max_distance
+                )
+            elif candidate_selection == "ball":
+                unmatched_candidates = get_candidates_ball(
+                    pred_kdtree, source_positions[cnode], all_target_nodes, pred_matched_nodes,
+                    radius=max_distance
+                )
+            else:
+                raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
 
             if unmatched_candidates:
                 #semantic_map = {}
@@ -815,8 +960,18 @@ def match_hierarchical(source, target, visualize=True):
 
         # Step c: Query nearby GT nodes
         all_gt_nodes = list(source.nodes)
-        unmatched_gt_candidates = get_candidates_query(gt_kdtree, target_positions[pnode], all_gt_nodes,
-                                                       gt_matched_nodes)
+        if candidate_selection == "query":
+            unmatched_gt_candidates = get_candidates_query(
+                gt_kdtree, target_positions[pnode], all_gt_nodes, gt_matched_nodes,
+                distance_upper_bound=max_distance
+            )
+        elif candidate_selection == "ball":
+            unmatched_gt_candidates = get_candidates_ball(
+                gt_kdtree, target_positions[pnode], all_gt_nodes, gt_matched_nodes,
+                radius=max_distance
+            )
+        else:
+            raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
 
         if not unmatched_gt_candidates:
             continue
@@ -879,8 +1034,18 @@ def match_hierarchical(source, target, visualize=True):
 
         cnode_semantic = gt_semantics.get(gnode)
         clabel = gt_labels[gnode]
-        unmatched_pred_candidates = get_candidates_query(pred_kdtree, source_positions[gnode], all_target_nodes,
-                                                         pred_matched_nodes)
+        if candidate_selection == "query":
+            unmatched_pred_candidates = get_candidates_query(
+                pred_kdtree, source_positions[gnode], all_target_nodes, pred_matched_nodes,
+                distance_upper_bound=max_distance
+            )
+        elif candidate_selection == "ball":
+            unmatched_pred_candidates = get_candidates_ball(
+                pred_kdtree, source_positions[gnode], all_target_nodes, pred_matched_nodes,
+                radius=max_distance
+            )
+        else:
+            raise ValueError(f"Unknown candidate_selection: {candidate_selection}")
 
         if not unmatched_pred_candidates:
             continue
@@ -939,7 +1104,7 @@ def match_hierarchical(source, target, visualize=True):
         #     print(f"No match found in STEP 4 for GT node {gnode}")
 
 
-    match_dict_one_to_one = match_one_to_one(source, target)
+    #match_dict_one_to_one = match_one_to_one(source, target)
 
     # if visualize:
     #     visualize_matching(source, target, match_dict, match_dict_one_to_one)
