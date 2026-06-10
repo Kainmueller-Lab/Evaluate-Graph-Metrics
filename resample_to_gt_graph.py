@@ -139,6 +139,11 @@ def get_arguments():
         "--debug", action="store_true", default=False,
         help="flag to set logging to DEBUG"
     )
+    parser.add_argument(
+        "--candidate_selection", type=str, default="query",
+        choices=["query", "ball"],
+        help="method to select matching candidates"
+    )
 
     args = parser.parse_args()
     return args
@@ -162,7 +167,8 @@ def process_pair(gt_path, pred_path, output_folder):
         target=H,
         matching_type=matching_type,
         matching_dist="fixed",
-        max_distance=5,
+        max_distance=1.5,
+        candidate_selection="ball",
         visualize=False,
     )
     logger.info(f"number of matched nodes: {len(matched.keys())} / {G.number_of_nodes()}")
