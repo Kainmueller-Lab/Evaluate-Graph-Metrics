@@ -1,8 +1,8 @@
 active_dataset: mt_syn #choose the dataset here
 
 paths:
-  gt_dir: "/mnt/md0/rajalakshmi/metrics/matching/data/ss_1/GT/" #path to GT graph folder
-  pred_dir: "/mnt/md0/rajalakshmi/metrics/matching/data/ss_1/pred/" #path to pred graph
+  gt_dir: "/mnt/md0/rajalakshmi/Unet_seg/validation_data/evaluation/GT/" #path to GT graph folder
+  pred_dir: "/mnt/md0/rajalakshmi/Unet_seg/validation_data/evaluation/pred/" #path to pred graph
   main_script: "main.py"
 
 evaluation_by_dataset:
@@ -14,9 +14,9 @@ evaluation_by_dataset:
     resample_to_gt: true # bcz it is already done during trexplorer-super evaluation
 
   mt_syn:
-    matching: "one_to_one"
+    matching: "hierarchical"
     matching_dist: "fixed"
-    candidate_selection: "ball"
+    candidate_selection: "query"
     max_distance: 10.0
     resample_to_gt: false
 
@@ -34,9 +34,3 @@ evaluation_by_dataset:
     max_distance: 4.0
     resample_to_gt: true
 
-#  mt_syn:
-#    matching: "hierarchical"
-#    matching_dist: "fixed"
-#    candidate_selection: "query"
-#    max_distance: 10.0
-#    resample_to_gt: false
